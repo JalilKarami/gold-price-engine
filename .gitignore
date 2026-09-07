@@ -1,0 +1,15 @@
+# Build output — releases are attached to tags, not committed.
+*.zip
+
+# OS cruft
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor
+.idea/
+.vscode/
+*.sublime-*
+
+# Local scratch
+*.log
