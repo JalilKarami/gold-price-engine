@@ -207,6 +207,11 @@ class Goldmate_Admin {
 				update_option( 'goldmate_rate_last_error', '', false );
 				self::notice( 'success', 'قیمت در انتظار تأیید نادیده گرفته شد.' );
 				break;
+
+			case 'clear_log':
+				Goldmate_Rates::clear_log();
+				self::notice( 'success', 'گزارش دریافت‌ها پاک شد.' );
+				break;
 		}
 	}
 
@@ -589,7 +594,76 @@ class Goldmate_Admin {
 		</p>
 
 		<h2 style="margin-top:24px;">تاریخچه‌ی قیمت روز</h2>
+		<p class="description" style="max-width:820px;">فقط تغییرات واقعی قیمت ثبت می‌شود. برای دیدن همه‌ی دریافت‌ها، گزارش پایین را ببینید.</p>
 		<?php self::render_history(); ?>
+
+		<h2 style="margin-top:24px;">گزارش دریافت‌ها</h2>
+		<?php self::render_log(); ?>
+		<?php
+	}
+
+	/**
+	 * Renders the fetch log with a one-line health summary above it.
+	 */
+	protected static function render_log() {
+
+		$log     = Goldmate_Rates::log();
+		$summary = Goldmate_Rates::log_summary();
+		$days    = goldmate_positive_float( goldmate_option( 'goldmate_log_days' ) );
+
+		if ( $summary['total'] > 0 ) {
+			printf(
+				'<p style="max-width:820px;">۲۴ ساعت گذشته: <strong>%s دریافت</strong> — %s موفق، <span style="color:%s;">%s ناموفق</span>%s</p>',
+				esc_html( number_format_i18n( $summary['total'] ) ),
+				esc_html( number_format_i18n( $summary['ok'] ) ),
+				$summary['failed'] > 0 ? '#b32d2e' : 'inherit',
+				esc_html( number_format_i18n( $summary['failed'] ) ),
+				$summary['retried'] > 0
+					? sprintf( ' — %s مورد با تلاش دوم موفق شد.', esc_html( number_format_i18n( $summary['retried'] ) ) )
+					: ''
+			);
+		}
+
+		if ( empty( $log ) ) {
+			echo '<p class="description">هنوز دریافتی ثبت نشده است.</p>';
+			return;
+		}
+		?>
+		<table class="widefat striped" style="max-width:820px;">
+			<thead>
+				<tr>
+					<th style="width:150px;">زمان</th>
+					<th style="width:170px;">نتیجه</th>
+					<th style="width:150px;">مقدار خوانده‌شده</th>
+					<th>توضیح</th>
+				</tr>
+			</thead>
+			<tbody>
+				<?php foreach ( array_slice( $log, 0, 50 ) as $entry ) : ?>
+					<?php $ok = 'applied' === $entry['outcome']; ?>
+					<tr>
+						<td><?php echo esc_html( goldmate_format_time( $entry['at'] ) ); ?></td>
+						<td style="color:<?php echo $ok ? '#1e7e34' : '#b32d2e'; ?>;">
+							<?php echo esc_html( Goldmate_Rates::outcome_label( $entry['outcome'] ) ); ?>
+							<?php if ( ! empty( $entry['attempts'] ) && $entry['attempts'] > 1 ) : ?>
+								<span style="color:#666;font-weight:400;"> (تلاش <?php echo esc_html( number_format_i18n( $entry['attempts'] ) ); ?>)</span>
+							<?php endif; ?>
+						</td>
+						<td><?php echo $entry['rate'] > 0 ? wp_kses_post( wc_price( $entry['rate'] ) ) : '—'; ?></td>
+						<td style="color:#666;"><?php echo esc_html( $entry['error'] ); ?></td>
+					</tr>
+				<?php endforeach; ?>
+			</tbody>
+		</table>
+		<p>
+			<?php if ( count( $log ) > 50 ) : ?>
+				<span class="description">۵۰ مورد آخر از <?php echo esc_html( number_format_i18n( count( $log ) ) ); ?> مورد ثبت‌شده نمایش داده شده است. </span>
+			<?php endif; ?>
+			<?php if ( $days > 0 ) : ?>
+				<span class="description">موارد قدیمی‌تر از <?php echo esc_html( number_format_i18n( $days ) ); ?> روز خودکار پاک می‌شوند.</span>
+			<?php endif; ?>
+		</p>
+		<p><?php self::button( 'clear_log', 'پاک کردن گزارش' ); ?></p>
 		<?php
 	}
 

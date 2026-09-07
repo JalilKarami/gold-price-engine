@@ -186,3 +186,26 @@ cannot be recovered. On multisite the routine runs for every site in the network
 - `goldmate_breakdown_rows` — the rows of the customer-facing table.
 - `goldmate_invoice_rows` — the rows written onto an order line.
 - `goldmate_batch_chunk_size` — products processed per background step (default 40).
+
+## Fetch log
+
+Every fetch attempt is recorded — applied, rejected by a guard, or failed —
+alongside the value read, the error text and how many attempts it took. The
+status tab shows the last 50 with a one-line summary of the past day:
+
+```
+۲۴ ساعت گذشته: ۲۳ دریافت — ۲۱ موفق، ۲ ناموفق — ۳ مورد با تلاش دوم موفق شد.
+```
+
+`goldmate_rate_last_error` only ever holds the most recent message, so a failure
+overnight was erased by the next success and a one-off blip looked identical to a
+pattern. The log is what makes a degrading host visible; a rising retry count is the
+early warning.
+
+Entries older than «نگهداری گزارش دریافت‌ها» (default 14 days) are pruned on write,
+with a hard cap of 500 entries so a five-minute fetch interval cannot grow the option
+without bound.
+
+The rate history is deliberately separate: it records only real price *changes*, and
+answers "what rate did this invoice use". Recording every identical hourly fetch there
+would bury the actual moves.

@@ -13,6 +13,8 @@ class Goldmate_Rates {
 	const GROUP       = 'goldmate';
 	const HISTORY_KEY = 'goldmate_rate_history';
 	const HISTORY_MAX = 100;
+	const LOG_KEY     = 'goldmate_fetch_log';
+	const LOG_MAX     = 500;
 
 	/**
 	 * Registers the fetch job and its schedule.
@@ -203,21 +205,24 @@ class Goldmate_Rates {
 	 * Performs one endpoint's request and turns its response into a rate.
 	 *
 	 * @param array $config One source's settings, as built by config().
-	 * @return array{rate: float, error: string, raw: string}
+	 * @return array{rate: float, error: string, raw: string, outcome: string, attempts: int}
 	 */
 	protected static function request( $config ) {
 
 		$result = array(
-			'rate'  => 0.0,
-			'error' => '',
-			'raw'   => '',
+			'rate'     => 0.0,
+			'error'    => '',
+			'raw'      => '',
+			'outcome'  => 'ok',
+			'attempts' => 0,
 		);
 
 		$url = $config['url'];
 		$key = $config['key'];
 
 		if ( '' === $url ) {
-			$result['error'] = 'آدرس سرویس تنظیم نشده است.';
+			$result['error']   = 'آدرس سرویس تنظیم نشده است.';
+			$result['outcome'] = 'config';
 			return $result;
 		}
 
@@ -236,10 +241,14 @@ class Goldmate_Rates {
 			$args['headers'][ $config['key_header'] ] = $key;
 		}
 
-		$response = self::request_with_retry( $url, $args );
+		$attempts = 0;
+		$response = self::request_with_retry( $url, $args, $attempts );
+
+		$result['attempts'] = $attempts;
 
 		if ( is_wp_error( $response ) ) {
-			$result['error'] = $response->get_error_message();
+			$result['error']   = $response->get_error_message();
+			$result['outcome'] = 'transport';
 			return $result;
 		}
 
@@ -249,28 +258,32 @@ class Goldmate_Rates {
 		$result['raw'] = mb_substr( $body, 0, 500 );
 
 		if ( $code < 200 || $code >= 300 ) {
-			$result['error'] = sprintf( 'پاسخ سرویس: HTTP %d', $code );
+			$result['error']   = sprintf( 'پاسخ سرویس: HTTP %d', $code );
+			$result['outcome'] = 'http';
 			return $result;
 		}
 
 		$data = json_decode( $body, true );
 
 		if ( null === $data && JSON_ERROR_NONE !== json_last_error() ) {
-			$result['error'] = 'پاسخ سرویس JSON معتبر نیست.';
+			$result['error']   = 'پاسخ سرویس JSON معتبر نیست.';
+			$result['outcome'] = 'shape';
 			return $result;
 		}
 
 		$value = goldmate_json_path( $data, $config['path'] );
 
 		if ( null === $value || is_array( $value ) || is_object( $value ) ) {
-			$result['error'] = 'مسیر JSON در پاسخ سرویس پیدا نشد.';
+			$result['error']   = 'مسیر JSON در پاسخ سرویس پیدا نشد.';
+			$result['outcome'] = 'shape';
 			return $result;
 		}
 
 		$freshness = self::freshness_error( $data, $config );
 
 		if ( '' !== $freshness ) {
-			$result['error'] = $freshness;
+			$result['error']   = $freshness;
+			$result['outcome'] = 'stale';
 			return $result;
 		}
 
@@ -279,7 +292,8 @@ class Goldmate_Rates {
 		$rate = goldmate_positive_float( $value ) * $multiplier;
 
 		if ( $rate <= 0 ) {
-			$result['error'] = 'مقدار دریافتی معتبر نیست.';
+			$result['error']   = 'مقدار دریافتی معتبر نیست.';
+			$result['outcome'] = 'shape';
 			return $result;
 		}
 
@@ -299,11 +313,13 @@ class Goldmate_Rates {
 	 * Only transport errors are retried. An HTTP 401 or a malformed body is a
 	 * settled answer — repeating the request just wastes the daily quota.
 	 *
-	 * @param string $url  Request URL.
-	 * @param array  $args Request arguments.
+	 * @param string $url      Request URL.
+	 * @param array  $args     Request arguments.
+	 * @param int    $attempts Filled with how many attempts were made, so the log
+	 *                         can show when a retry is what saved the fetch.
 	 * @return array|WP_Error
 	 */
-	protected static function request_with_retry( $url, $args ) {
+	protected static function request_with_retry( $url, $args, &$attempts = 0 ) {
 
 		/**
 		 * Filters how many extra attempts a failed request gets.
@@ -316,6 +332,7 @@ class Goldmate_Rates {
 		for ( $attempt = 0; ; $attempt++ ) {
 
 			$response = wp_remote_get( $url, $args );
+			$attempts = $attempt + 1;
 
 			if ( ! is_wp_error( $response ) || $attempt >= $retries ) {
 				return $response;
@@ -397,6 +414,7 @@ class Goldmate_Rates {
 		if ( '' !== $result['error'] ) {
 			update_option( 'goldmate_rate_last_error', $result['error'], false );
 			update_option( 'goldmate_rate_checked_at', time(), false );
+			self::record_log( $result, $result['outcome'] );
 			return $result;
 		}
 
@@ -412,7 +430,10 @@ class Goldmate_Rates {
 				'goldmate_rate_last_error',
 				sprintf(
 					'قیمت دریافتی %s با قیمت فعلی %s٪ اختلاف دارد و اعمال نشد. از بخش «وضعیت» می‌توانید دستی تأیید کنید.',
-					wp_strip_all_tags( wc_price( $result['rate'] ) ),
+					// Plain text, not wc_price(): this message is escaped wherever
+					// it is shown, so a numeric currency entity would be printed
+					// literally in the status table and the fetch log.
+					goldmate_plain_price( $result['rate'] ),
 					wc_format_localized_decimal( round( $deviation, 1 ) )
 				),
 				false
@@ -420,6 +441,9 @@ class Goldmate_Rates {
 			update_option( 'goldmate_rate_checked_at', time(), false );
 
 			$result['rejected'] = true;
+			$result['error']    = get_option( 'goldmate_rate_last_error', '' );
+
+			self::record_log( $result, 'deviation' );
 
 			return $result;
 		}
@@ -427,6 +451,8 @@ class Goldmate_Rates {
 		self::set_rate( $result['rate'], 'auto' );
 
 		$result['applied'] = true;
+
+		self::record_log( $result, 'applied' );
 
 		return $result;
 	}
@@ -469,9 +495,14 @@ class Goldmate_Rates {
 		update_option( 'goldmate_rate_last_error', '', false );
 		delete_option( 'goldmate_pending_rate' );
 
-		self::record_history( $rate, $source );
-
+		// History answers "what rate did this invoice use", so only real changes
+		// belong in it. An hourly fetch that returns the same number all evening
+		// would otherwise bury the actual moves under identical rows; every
+		// attempt is recorded in the fetch log instead.
 		if ( abs( $rate - $previous ) > 0.0001 ) {
+
+			self::record_history( $rate, $source );
+
 			Goldmate_Batch::start( 'auto' === $source ? 'دریافت خودکار قیمت روز' : 'تغییر دستی قیمت روز' );
 		}
 	}
@@ -513,6 +544,146 @@ class Goldmate_Rates {
 		$history = get_option( self::HISTORY_KEY, array() );
 
 		return is_array( $history ) ? $history : array();
+	}
+
+	/* ---------------------------------------------------------------------
+	 *  Fetch log
+	 * ------------------------------------------------------------------ */
+
+	/**
+	 * Records the outcome of one fetch attempt.
+	 *
+	 * `goldmate_rate_last_error` only ever holds the most recent message, so a
+	 * failure at 3am is erased by the next success and nobody can tell a one-off
+	 * blip from a pattern. This keeps every attempt long enough to see the shape
+	 * of the problem.
+	 *
+	 * @param array  $result  Fetch result.
+	 * @param string $outcome One of: applied, deviation, stale, transport, http,
+	 *                        shape, config.
+	 */
+	protected static function record_log( $result, $outcome ) {
+
+		$log = self::log();
+
+		array_unshift(
+			$log,
+			array(
+				'at'       => time(),
+				'outcome'  => $outcome,
+				'rate'     => isset( $result['rate'] ) ? (float) $result['rate'] : 0.0,
+				'error'    => isset( $result['error'] ) ? mb_substr( (string) $result['error'], 0, 300 ) : '',
+				'attempts' => isset( $result['attempts'] ) ? (int) $result['attempts'] : 0,
+			)
+		);
+
+		update_option( self::LOG_KEY, self::prune_log( $log ), false );
+	}
+
+	/**
+	 * Trims the log by both age and count.
+	 *
+	 * @param array[] $log Newest-first entries.
+	 * @return array[]
+	 */
+	protected static function prune_log( $log ) {
+
+		$days = goldmate_positive_float( goldmate_option( 'goldmate_log_days' ) );
+
+		if ( $days > 0 ) {
+
+			$cutoff = time() - (int) ( $days * DAY_IN_SECONDS );
+
+			$log = array_values(
+				array_filter(
+					$log,
+					function ( $entry ) use ( $cutoff ) {
+						return isset( $entry['at'] ) && (int) $entry['at'] >= $cutoff;
+					}
+				)
+			);
+		}
+
+		// A hard cap as well: a site fetching every five minutes would otherwise
+		// build a very large option before the age limit ever bites.
+		return array_slice( $log, 0, self::LOG_MAX );
+	}
+
+	/**
+	 * Reads the fetch log, newest first.
+	 *
+	 * @return array[]
+	 */
+	public static function log() {
+
+		$log = get_option( self::LOG_KEY, array() );
+
+		return is_array( $log ) ? $log : array();
+	}
+
+	/**
+	 * Counts the last day's outcomes, for the one-line health summary.
+	 *
+	 * @return array{total: int, ok: int, failed: int, retried: int}
+	 */
+	public static function log_summary() {
+
+		$since   = time() - DAY_IN_SECONDS;
+		$summary = array(
+			'total'   => 0,
+			'ok'      => 0,
+			'failed'  => 0,
+			'retried' => 0,
+		);
+
+		foreach ( self::log() as $entry ) {
+
+			if ( ! isset( $entry['at'] ) || (int) $entry['at'] < $since ) {
+				continue;
+			}
+
+			$summary['total']++;
+
+			if ( 'applied' === $entry['outcome'] ) {
+				$summary['ok']++;
+			} else {
+				$summary['failed']++;
+			}
+
+			if ( isset( $entry['attempts'] ) && (int) $entry['attempts'] > 1 ) {
+				$summary['retried']++;
+			}
+		}
+
+		return $summary;
+	}
+
+	/**
+	 * Human-readable label for a log outcome.
+	 *
+	 * @param string $outcome Outcome key.
+	 * @return string
+	 */
+	public static function outcome_label( $outcome ) {
+
+		$labels = array(
+			'applied'   => 'اعمال شد',
+			'deviation' => 'رد شد — اختلاف زیاد',
+			'stale'     => 'رد شد — قیمت کهنه',
+			'transport' => 'خطای اتصال',
+			'http'      => 'خطای پاسخ سرویس',
+			'shape'     => 'پاسخ نامفهوم',
+			'config'    => 'تنظیمات ناقص',
+		);
+
+		return isset( $labels[ $outcome ] ) ? $labels[ $outcome ] : $outcome;
+	}
+
+	/**
+	 * Empties the fetch log.
+	 */
+	public static function clear_log() {
+		delete_option( self::LOG_KEY );
 	}
 
 	/**

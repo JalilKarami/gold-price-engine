@@ -47,6 +47,9 @@ function goldmate_defaults() {
 		// Staleness handling.
 		'goldmate_stale_hours'     => 24,
 		'goldmate_stale_action'    => 'notice',
+
+		// Fetch log retention.
+		'goldmate_log_days'        => 14,
 	);
 }
 
