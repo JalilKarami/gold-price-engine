@@ -120,6 +120,17 @@ values left from the previous one, after a confirmation, so a hand-tuned custom
 endpoint cannot vanish on a misclick. Save, then use «دریافت آزمایشی» on the status
 tab to confirm the new source before it prices anything.
 
+### Transport retries
+
+A failed request is retried once before it is reported (`goldmate_fetch_retries`
+filters the count, 0–3). Shared hosts resolve DNS slowly and intermittently — this
+shop loses roughly one hourly fetch in four to
+`cURL error 28: Resolving timed out` — and one extra attempt absorbs that instead of
+leaving the rate stale until the next scheduled run.
+
+Only transport errors are retried. An HTTP 401 or a malformed body is a settled
+answer; repeating it would just spend the daily quota.
+
 ### Guards
 
 Three guards protect the catalogue:

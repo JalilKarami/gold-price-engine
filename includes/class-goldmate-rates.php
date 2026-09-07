@@ -236,7 +236,7 @@ class Goldmate_Rates {
 			$args['headers'][ $config['key_header'] ] = $key;
 		}
 
-		$response = wp_remote_get( $url, $args );
+		$response = self::request_with_retry( $url, $args );
 
 		if ( is_wp_error( $response ) ) {
 			$result['error'] = $response->get_error_message();
@@ -286,6 +286,45 @@ class Goldmate_Rates {
 		$result['rate'] = $rate;
 
 		return $result;
+	}
+
+	/**
+	 * Performs the HTTP request, retrying transport failures.
+	 *
+	 * Shared hosts resolve DNS slowly and intermittently: on this shop three of
+	 * four hourly fetches succeed and the fourth dies on
+	 * `cURL error 28: Resolving timed out`. One extra attempt absorbs that
+	 * without waiting a whole hour for the next scheduled run.
+	 *
+	 * Only transport errors are retried. An HTTP 401 or a malformed body is a
+	 * settled answer — repeating the request just wastes the daily quota.
+	 *
+	 * @param string $url  Request URL.
+	 * @param array  $args Request arguments.
+	 * @return array|WP_Error
+	 */
+	protected static function request_with_retry( $url, $args ) {
+
+		/**
+		 * Filters how many extra attempts a failed request gets.
+		 *
+		 * @param int $retries Extra attempts after the first. Default 1.
+		 */
+		$retries = (int) apply_filters( 'goldmate_fetch_retries', 1 );
+		$retries = max( 0, min( 3, $retries ) );
+
+		for ( $attempt = 0; ; $attempt++ ) {
+
+			$response = wp_remote_get( $url, $args );
+
+			if ( ! is_wp_error( $response ) || $attempt >= $retries ) {
+				return $response;
+			}
+
+			// Long enough for a flaky resolver to settle, short enough that an
+			// admin waiting on the test button does not think the page hung.
+			sleep( 2 );
+		}
 	}
 
 	/**
