@@ -1,0 +1,8 @@
+# The plugin ships to a Linux server, so keep LF in the repo and the working
+# copy. Without this, Git for Windows checks these files out as CRLF and the
+# line endings travel into the release zip.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.woff binary
+*.woff2 binary
