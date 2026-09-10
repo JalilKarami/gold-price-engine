@@ -78,6 +78,25 @@ class Goldmate_Rates {
 		);
 	}
 
+	/**
+	 * Human-readable label for a provider key stored on a history row.
+	 *
+	 * @param string $provider Raw preset key, e.g. `atn`; empty for manual entries.
+	 * @return string
+	 */
+	public static function provider_label( $provider ) {
+
+		if ( '' === $provider ) {
+			return '';
+		}
+
+		$presets = self::presets();
+
+		// A preset removed or renamed since the row was recorded still shows
+		// something meaningful rather than silently disappearing.
+		return isset( $presets[ $provider ] ) ? $presets[ $provider ]['label'] : $provider;
+	}
+
 	/* ---------------------------------------------------------------------
 	 *  Scheduling
 	 * ------------------------------------------------------------------ */
@@ -574,10 +593,17 @@ class Goldmate_Rates {
 		array_unshift(
 			$history,
 			array(
-				'rate'   => $rate,
-				'at'     => time(),
-				'source' => $source,
-				'user'   => get_current_user_id(),
+				'rate'     => $rate,
+				'at'       => time(),
+				'source'   => $source,
+				// The provider actually in effect when an auto-fetch was applied.
+				// Manual entries carry no provider — a person typed the number in,
+				// not a service. Stored as the raw preset key (e.g. `atn`) rather
+				// than its label, so a renamed preset still resolves correctly for
+				// old rows; an unrecognised key (a since-removed custom preset)
+				// just falls back to printing itself.
+				'provider' => 'auto' === $source ? (string) goldmate_option( 'goldmate_rate_source' ) : '',
+				'user'     => get_current_user_id(),
 			)
 		);
 

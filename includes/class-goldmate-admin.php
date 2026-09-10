@@ -731,11 +731,25 @@ class Goldmate_Admin {
 			</thead>
 			<tbody>
 				<?php foreach ( array_slice( $history, 0, 30 ) as $entry ) : ?>
-					<?php $user = ! empty( $entry['user'] ) ? get_userdata( $entry['user'] ) : false; ?>
+					<?php
+					$user = ! empty( $entry['user'] ) ? get_userdata( $entry['user'] ) : false;
+
+					// Rows recorded before the provider column existed carry no
+					// `provider` key at all; they just show as plain «خودکار».
+					$provider_label = 'auto' === $entry['source']
+						? Goldmate_Rates::provider_label( isset( $entry['provider'] ) ? $entry['provider'] : '' )
+						: '';
+					?>
 					<tr>
 						<td><?php echo esc_html( goldmate_format_time( $entry['at'] ) ); ?></td>
 						<td><?php echo wp_kses_post( wc_price( $entry['rate'] ) ); ?></td>
-						<td><?php echo 'auto' === $entry['source'] ? 'خودکار' : 'دستی'; ?></td>
+						<td>
+							<?php if ( 'auto' === $entry['source'] ) : ?>
+								خودکار<?php echo '' !== $provider_label ? ' — ' . esc_html( $provider_label ) : ''; ?>
+							<?php else : ?>
+								دستی
+							<?php endif; ?>
+						</td>
 						<td><?php echo $user ? esc_html( $user->display_name ) : '—'; ?></td>
 					</tr>
 				<?php endforeach; ?>
