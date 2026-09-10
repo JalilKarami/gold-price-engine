@@ -33,16 +33,18 @@ function goldmate_defaults() {
 		'goldmate_delete_data'     => 'no',
 
 		// Automatic rate fetching.
-		'goldmate_rate_source'     => 'manual',
-		'goldmate_api_url'         => '',
-		'goldmate_api_key'         => '',
-		'goldmate_api_key_header'  => '',
-		'goldmate_api_path'        => '',
-		'goldmate_api_multiplier'  => 1,
-		'goldmate_api_time_path'   => '',
-		'goldmate_api_max_age'     => 0,
-		'goldmate_fetch_interval'  => 60,
-		'goldmate_max_deviation'   => 20,
+		'goldmate_rate_source'       => 'manual',
+		'goldmate_api_url'           => '',
+		'goldmate_api_key'           => '',
+		'goldmate_api_key_header'    => '',
+		'goldmate_api_path'          => '',
+		'goldmate_api_multiplier'    => 1,
+		'goldmate_api_time_path'     => '',
+		'goldmate_api_max_age'       => 0,
+		'goldmate_fetch_interval'    => 60,
+		'goldmate_max_deviation'     => 20,
+		'goldmate_min_change_pct'    => 0.4,
+		'goldmate_min_change_amount' => 0,
 
 		// Staleness handling.
 		'goldmate_stale_hours'     => 24,
@@ -265,6 +267,31 @@ function goldmate_json_find( $list, $field, $value ) {
 }
 
 /**
+ * Correction for a date filter that formats from UTC and drops the site timezone.
+ *
+ * woodmart-plus converts every wp_date() result to the Jalali calendar through
+ * its `wcplus_date_to_jalali` filter, but rebuilds the date from the raw UTC
+ * timestamp and ignores the timezone wp_date() hands it. Every date on the site
+ * therefore reads `gmt_offset` hours early — 3:30 behind Tehran. That plugin is
+ * ionCube-encoded, so the only place this can be corrected is at the call site:
+ * shifting the timestamp by the same offset lands its arithmetic back on local
+ * time, and the Jalali date it prints stays correct too.
+ *
+ * The shift applies only while that filter is actually installed, so removing or
+ * fixing woodmart-plus restores plain wp_date() behaviour with no change here.
+ *
+ * @return int Seconds to add before formatting; zero on a healthy site.
+ */
+function goldmate_date_offset_fix() {
+
+	if ( ! class_exists( 'wcplus_date_to_jalali' ) || ! has_filter( 'wp_date' ) ) {
+		return 0;
+	}
+
+	return (int) round( (float) get_option( 'gmt_offset', 0 ) * HOUR_IN_SECONDS );
+}
+
+/**
  * Formats a timestamp in the site's timezone, or a dash when unset.
  *
  * @param int $timestamp Unix timestamp.
@@ -278,5 +305,5 @@ function goldmate_format_time( $timestamp ) {
 		return '—';
 	}
 
-	return wp_date( 'Y/m/d H:i', $timestamp );
+	return wp_date( 'Y/m/d H:i', $timestamp + goldmate_date_offset_fix() );
 }

@@ -404,7 +404,7 @@ class Goldmate_Rates {
 	/**
 	 * Cron callback: fetches, validates and stores the rate.
 	 *
-	 * @param bool $force Skip the deviation guard.
+	 * @param bool $force Skip the deviation guard and the minimum-change guard.
 	 * @return array The fetch result, annotated with what was done.
 	 */
 	public static function run_fetch( $force = false ) {
@@ -421,6 +421,22 @@ class Goldmate_Rates {
 		$current   = goldmate_positive_float( goldmate_option( 'goldmate_rate_per_gram' ) );
 		$deviation = self::deviation_pct( $current, $result['rate'] );
 		$max       = goldmate_positive_float( goldmate_option( 'goldmate_max_deviation' ) );
+
+		if ( ! $force && $current > 0 && ! self::exceeds_min_change( $current, $result['rate'] ) ) {
+
+			// Left exactly where it was: the applied rate is the baseline the
+			// *next* fetch compares against too, so several small moves in the
+			// same direction still add up to crossing the threshold instead of
+			// each one resetting the comparison and never tripping at all.
+			update_option( 'goldmate_rate_checked_at', time(), false );
+			update_option( 'goldmate_rate_last_error', '', false );
+
+			$result['skipped'] = true;
+
+			self::record_log( $result, 'small' );
+
+			return $result;
+		}
 
 		if ( ! $force && $current > 0 && $max > 0 && $deviation > $max ) {
 
@@ -471,6 +487,40 @@ class Goldmate_Rates {
 		}
 
 		return abs( $to - $from ) / $from * 100;
+	}
+
+	/**
+	 * True when a fetched rate has moved far enough from the applied rate to be
+	 * worth repricing the whole catalogue over.
+	 *
+	 * Two independent thresholds — a flat toman amount and a percentage — can
+	 * both be set; clearing either one is enough to trigger. Both default to
+	 * being read from options, so the feature is a no-op until an admin sets one.
+	 *
+	 * @param float $previous Currently applied rate.
+	 * @param float $new      Freshly fetched rate.
+	 * @return bool
+	 */
+	public static function exceeds_min_change( $previous, $new ) {
+
+		$min_amount = goldmate_positive_float( goldmate_option( 'goldmate_min_change_amount' ) );
+		$min_pct    = goldmate_positive_float( goldmate_option( 'goldmate_min_change_pct' ) );
+
+		if ( $min_amount <= 0 && $min_pct <= 0 ) {
+			return true;
+		}
+
+		$diff = abs( $new - $previous );
+
+		if ( $min_amount > 0 && $diff >= $min_amount ) {
+			return true;
+		}
+
+		if ( $min_pct > 0 && $previous > 0 && ( $diff / $previous * 100 ) >= $min_pct ) {
+			return true;
+		}
+
+		return false;
 	}
 
 	/**
@@ -624,7 +674,7 @@ class Goldmate_Rates {
 	/**
 	 * Counts the last day's outcomes, for the one-line health summary.
 	 *
-	 * @return array{total: int, ok: int, failed: int, retried: int}
+	 * @return array{total: int, ok: int, skipped: int, failed: int, retried: int}
 	 */
 	public static function log_summary() {
 
@@ -632,6 +682,7 @@ class Goldmate_Rates {
 		$summary = array(
 			'total'   => 0,
 			'ok'      => 0,
+			'skipped' => 0,
 			'failed'  => 0,
 			'retried' => 0,
 		);
@@ -646,6 +697,11 @@ class Goldmate_Rates {
 
 			if ( 'applied' === $entry['outcome'] ) {
 				$summary['ok']++;
+			} elseif ( 'small' === $entry['outcome'] ) {
+				// A fetch that worked but was below the minimum-change threshold
+				// is a success, not a failure — it must not inflate the failure
+				// count on a quiet trading day.
+				$summary['skipped']++;
 			} else {
 				$summary['failed']++;
 			}
@@ -668,6 +724,7 @@ class Goldmate_Rates {
 
 		$labels = array(
 			'applied'   => 'اعمال شد',
+			'small'     => 'بدون تغییر کافی',
 			'deviation' => 'رد شد — اختلاف زیاد',
 			'stale'     => 'رد شد — قیمت کهنه',
 			'transport' => 'خطای اتصال',

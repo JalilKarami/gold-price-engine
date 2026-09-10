@@ -613,9 +613,12 @@ class Goldmate_Admin {
 
 		if ( $summary['total'] > 0 ) {
 			printf(
-				'<p style="max-width:820px;">۲۴ ساعت گذشته: <strong>%s دریافت</strong> — %s موفق، <span style="color:%s;">%s ناموفق</span>%s</p>',
+				'<p style="max-width:820px;">۲۴ ساعت گذشته: <strong>%s دریافت</strong> — %s اعمال شد%s، <span style="color:%s;">%s ناموفق</span>%s</p>',
 				esc_html( number_format_i18n( $summary['total'] ) ),
 				esc_html( number_format_i18n( $summary['ok'] ) ),
+				$summary['skipped'] > 0
+					? sprintf( '، %s بدون تغییر کافی', esc_html( number_format_i18n( $summary['skipped'] ) ) )
+					: '',
 				$summary['failed'] > 0 ? '#b32d2e' : 'inherit',
 				esc_html( number_format_i18n( $summary['failed'] ) ),
 				$summary['retried'] > 0
@@ -640,10 +643,14 @@ class Goldmate_Admin {
 			</thead>
 			<tbody>
 				<?php foreach ( array_slice( $log, 0, 50 ) as $entry ) : ?>
-					<?php $ok = 'applied' === $entry['outcome']; ?>
+					<?php
+					$ok      = 'applied' === $entry['outcome'];
+					$neutral = 'small' === $entry['outcome'];
+					$color   = $ok ? '#1e7e34' : ( $neutral ? '#666' : '#b32d2e' );
+					?>
 					<tr>
 						<td><?php echo esc_html( goldmate_format_time( $entry['at'] ) ); ?></td>
-						<td style="color:<?php echo $ok ? '#1e7e34' : '#b32d2e'; ?>;">
+						<td style="color:<?php echo esc_attr( $color ); ?>;">
 							<?php echo esc_html( Goldmate_Rates::outcome_label( $entry['outcome'] ) ); ?>
 							<?php if ( ! empty( $entry['attempts'] ) && $entry['attempts'] > 1 ) : ?>
 								<span style="color:#666;font-weight:400;"> (تلاش <?php echo esc_html( number_format_i18n( $entry['attempts'] ) ); ?>)</span>

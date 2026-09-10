@@ -133,11 +133,19 @@ answer; repeating it would just spend the daily quota.
 
 ### Guards
 
-Three guards protect the catalogue:
+Four guards protect the catalogue:
 
 - A fetched rate that differs from the current one by more than the configured
   percentage is held for manual approval instead of being applied, so a provider
   glitch cannot reprice the whole shop.
+- **Minimum change** — «کمینه‌ی تغییر برای اعمال قیمت» (percentage, flat Toman, or
+  both) skips repricing the catalogue when the fetched rate hasn't moved far enough
+  from the applied one to be worth it, so shoppers don't watch the price twitch on
+  every few-hundred-Toman tick. The comparison is always against the last *applied*
+  rate, not the last *fetched* one, so several small moves in the same direction
+  still accumulate toward the threshold instead of each fetch resetting the
+  baseline. Clearing either the percentage or the flat threshold is enough to
+  apply; leave both at 0 to apply every real change, as in earlier versions.
 - **Response age** — set «مسیر زمان به‌روزرسانی» to the timestamp the provider
   publishes next to the price (Unix seconds or a written date both parse) and
   «بیشینه‌ی قدمت پاسخ» to how old it may be. A feed serving a frozen number still
@@ -147,8 +155,10 @@ Three guards protect the catalogue:
 - A stored rate older than the staleness threshold can raise an admin warning or
   block purchases of gold products entirely.
 
-The first two reject the fetch and leave the previous rate in place; the third acts
-on a rate that was accepted but has since aged.
+The first three reject the fetch and leave the previous rate in place (the
+minimum-change guard is the only one of the three that isn't logged as an error —
+it's an expected outcome, shown in the fetch log as «بدون تغییر کافی»); the fourth
+acts on a rate that was accepted but has since aged.
 
 ## Background repricing
 
