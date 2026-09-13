@@ -23,6 +23,8 @@ class Goldmate_Display {
 
 		add_filter( 'woocommerce_is_purchasable', array( __CLASS__, 'maybe_block_purchase' ), 20, 2 );
 		add_action( 'woocommerce_single_product_summary', array( __CLASS__, 'render_stale_notice' ), 9 );
+
+		add_shortcode( 'goldmate_price_banner', array( __CLASS__, 'render_price_banner' ) );
 	}
 
 	/**
@@ -216,6 +218,101 @@ class Goldmate_Display {
 		} )( window.jQuery );
 		</script>
 		<?php
+	}
+
+	/* ---------------------------------------------------------------------
+	 *  Site-wide price banner
+	 * ------------------------------------------------------------------ */
+
+	/**
+	 * The rate that every product in the catalogue is currently priced at.
+	 *
+	 * `goldmate_rate_per_gram` is updated the instant a new rate is accepted,
+	 * but Goldmate_Batch then takes some time — background chunks, not one
+	 * blocking request — to actually reprice every product against it. Reading
+	 * the option directly during that window would show a number ahead of what
+	 * shoppers can actually buy at, so while a reprice is running this falls
+	 * back to the previous rate, which by definition already reached every
+	 * product before the new one was accepted.
+	 *
+	 * @return float Zero when no rate has ever finished applying to the catalogue.
+	 */
+	protected static function applied_rate() {
+
+		if ( ! Goldmate_Batch::is_running() ) {
+			return goldmate_positive_float( goldmate_option( 'goldmate_rate_per_gram' ) );
+		}
+
+		$history = Goldmate_Rates::history();
+
+		// history[0] is the new rate the running batch is applying — not yet
+		// true for the whole catalogue. history[1] is the one it replaced.
+		return isset( $history[1]['rate'] ) ? goldmate_positive_float( $history[1]['rate'] ) : 0.0;
+	}
+
+	/**
+	 * Renders the [goldmate_price_banner] shortcode.
+	 *
+	 * Always reflects what the catalogue is actually priced at right now —
+	 * never the shop's raw API feed, and never a rate whose reprice hasn't
+	 * finished reaching every product yet — so it can never disagree with the
+	 * prices shoppers see on product pages.
+	 *
+	 * @param array $atts Shortcode attributes.
+	 * @return string
+	 */
+	public static function render_price_banner( $atts ) {
+
+		$atts = shortcode_atts(
+			array(
+				'label'     => 'قیمت هر گرم طلای ۱۸ عیار',
+				'show_time' => 'yes',
+			),
+			$atts,
+			'goldmate_price_banner'
+		);
+
+		$updating = Goldmate_Batch::is_running();
+		$rate     = self::applied_rate();
+
+		if ( $rate <= 0 ) {
+			return '';
+		}
+
+		$stale = ! $updating && Goldmate_Rates::is_stale();
+
+		$dot_color = $updating ? '#fa941a' : ( $stale ? '#ef5350' : '#26a69a' );
+
+		$html  = sprintf(
+			'<div class="goldmate-price-banner%s" style="display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;padding:6px 12px;font-size:.9em;line-height:1.6;">',
+			$updating ? ' goldmate-price-banner--updating' : ( $stale ? ' goldmate-price-banner--stale' : '' )
+		);
+
+		$html .= sprintf(
+			'<span class="goldmate-price-banner-dot" style="width:8px;height:8px;border-radius:50%%;display:inline-block;background:%s;"></span>',
+			$dot_color
+		);
+
+		$html .= sprintf( '<span class="goldmate-price-banner-label">%s:</span>', esc_html( $atts['label'] ) );
+		$html .= sprintf( '<strong class="goldmate-price-banner-value">%s</strong>', wp_kses_post( wc_price( $rate ) ) );
+
+		if ( 'yes' === $atts['show_time'] && ! $updating ) {
+			$updated = (int) get_option( 'goldmate_rate_updated_at', 0 );
+			$html   .= sprintf(
+				'<span class="goldmate-price-banner-time" style="opacity:.7;">به‌روزرسانی: %s</span>',
+				esc_html( goldmate_format_time( $updated ) )
+			);
+		}
+
+		if ( $updating ) {
+			$html .= '<span class="goldmate-price-banner-updating-label" style="color:#fa941a;">(در حال به‌روزرسانی قیمت محصولات…)</span>';
+		} elseif ( $stale ) {
+			$html .= '<span class="goldmate-price-banner-stale-label" style="color:#ef5350;">(قیمت به‌روز نیست)</span>';
+		}
+
+		$html .= '</div>';
+
+		return $html;
 	}
 
 	/* ---------------------------------------------------------------------

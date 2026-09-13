@@ -494,6 +494,14 @@ class Goldmate_Admin {
 						);
 						break;
 
+					case 'text_rtl':
+						printf(
+							'<input type="text" id="%1$s" name="%1$s" value="%2$s" class="large-text" dir="rtl">',
+							esc_attr( $id ),
+							esc_attr( $value )
+						);
+						break;
+
 					default:
 						printf(
 							'<input type="text" id="%1$s" name="%1$s" value="%2$s" class="large-text" dir="ltr">',

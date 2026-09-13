@@ -50,6 +50,14 @@ class Goldmate_Pricing {
 		add_action( 'woocommerce_update_product_variation', array( __CLASS__, 'on_variation_saved' ), 20, 2 );
 		add_action( 'woocommerce_new_product_variation', array( __CLASS__, 'on_variation_saved' ), 20, 2 );
 
+		// The classic admin "Save changes" button in the Variations panel writes
+		// the goldmate variation fields on this hook (see
+		// Goldmate_Product_Fields::save_variation_fields(), priority 10), which
+		// fires *after* woocommerce_update_product_variation. Reprice again here,
+		// at a later priority, so the price is built from the values that were
+		// just saved instead of the ones still in postmeta a moment earlier.
+		add_action( 'woocommerce_save_product_variation', array( __CLASS__, 'on_variation_saved' ), 20, 2 );
+
 		// CSV importer.
 		add_action( 'woocommerce_product_import_inserted_product_object', array( __CLASS__, 'on_product_imported' ), 20, 2 );
 	}
@@ -229,10 +237,13 @@ class Goldmate_Pricing {
 	/**
 	 * Handles variation saves, repricing just the variation that changed.
 	 *
-	 * @param int             $variation_id Variation ID.
-	 * @param WC_Product|null $variation    Variation object.
+	 * Shared by `woocommerce_update_product_variation`/`woocommerce_new_product_variation`
+	 * (second arg: variation object or none) and `woocommerce_save_product_variation`
+	 * (second arg: form loop index). The second argument is unused either way.
+	 *
+	 * @param int $variation_id Variation ID.
 	 */
-	public static function on_variation_saved( $variation_id, $variation = null ) {
+	public static function on_variation_saved( $variation_id ) {
 
 		if ( isset( self::$in_progress[ $variation_id ] ) ) {
 			return;
