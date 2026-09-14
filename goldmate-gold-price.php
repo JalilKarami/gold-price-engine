@@ -2,7 +2,7 @@
 /**
  * Plugin Name: گلدمیت — محاسبه قیمت طلا
  * Description: محاسبه خودکار قیمت محصولات طلا بر اساس فرمول: وزن × (قیمت روز + اجرت) + سود + متعلقات + مالیات بر اجرت و سود. شامل پشتیبانی از محصولات متغیر، دریافت خودکار قیمت روز و به‌روزرسانی دسته‌ای.
- * Version: 2.7.0
+ * Version: 2.8.3
  * Author: gold-mate.ir
  * Requires Plugins: woocommerce
  * WC requires at least: 7.0
@@ -15,7 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'GOLDMATE_VERSION', '2.7.0' );
+define( 'GOLDMATE_VERSION', '2.8.3' );
 define( 'GOLDMATE_FILE', __FILE__ );
 define( 'GOLDMATE_PATH', plugin_dir_path( __FILE__ ) );
 define( 'GOLDMATE_URL', plugin_dir_url( __FILE__ ) );
@@ -28,8 +28,10 @@ require_once GOLDMATE_PATH . 'includes/class-goldmate-rates.php';
 require_once GOLDMATE_PATH . 'includes/class-goldmate-product-fields.php';
 require_once GOLDMATE_PATH . 'includes/class-goldmate-display.php';
 require_once GOLDMATE_PATH . 'includes/class-goldmate-order.php';
+require_once GOLDMATE_PATH . 'includes/class-goldmate-accessories.php';
 require_once GOLDMATE_PATH . 'includes/class-goldmate-settings.php';
 require_once GOLDMATE_PATH . 'includes/class-goldmate-admin.php';
+require_once GOLDMATE_PATH . 'includes/goldmate-variation-selector.php';
 
 /**
  * Declares compatibility with WooCommerce's High-Performance Order Storage.
@@ -70,7 +72,9 @@ function goldmate_init() {
 	Goldmate_Product_Fields::init();
 	Goldmate_Display::init();
 	Goldmate_Order::init();
+	Goldmate_Accessories::init();
 	Goldmate_Admin::init();
+	Goldmate_Variation_Selector::init();
 }
 add_action( 'plugins_loaded', 'goldmate_init' );
 

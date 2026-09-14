@@ -75,6 +75,29 @@ panel. Variable products use the same fields as family defaults; each variation 
 override any of them, or opt out entirely. A blank variation field inherits from the
 parent, which usually means only the weight needs to be set per ring size.
 
+## Linked accessory products (زنجیر، جعبه، …)
+
+Optional add-ons such as a chain are **not** WooCommerce variation attributes.
+Putting chain length × pendant weight into the variation matrix explodes SKUs and
+couples unrelated inventory.
+
+Instead, on the product edit screen under **محصولات مرتبط / Linked Products**,
+configure one or more **متعلقات قابل انتخاب** groups:
+
+- **عنوان گروه** — e.g. زنجیر طلا
+- **برچسب گزینهٔ خالی** — e.g. بدون زنجیر
+- **محصولات / متغیرها** — search and link existing gold products (or specific
+  variations). Variable parents expand to every purchasable variation on the
+  storefront.
+
+On the product page the shopper picks at most one option per group. At add-to-cart,
+each chosen accessory is added as a **separate cart line**, still priced by GoldMate,
+with its own stock and order breakdown. Removing or changing the quantity of the
+jewellery line keeps the linked accessories in sync.
+
+Use WC variations only for real SKUs of the piece itself (size, weight of *this*
+pendant). Use linked accessory groups for anything optional and additive.
+
 ## Automatic rate fetching
 
 Any JSON endpoint works: give it a URL, an optional API key (as `{KEY}` in the URL or

@@ -1,0 +1,57 @@
+/* Fallback layout when goldmate-vd chrome has not enhanced the group yet. */
+.goldmate-accessories {
+	box-sizing: border-box;
+	width: 100%;
+	max-width: 100%;
+	min-width: 0;
+	margin: 0 0 1.1em;
+	display: flex;
+	flex-direction: column;
+	gap: 0.75em;
+}
+
+.variations_button .goldmate-accessories,
+.woocommerce-variation-add-to-cart .goldmate-accessories {
+	flex: 1 1 100%;
+}
+
+.goldmate-accessories .goldmate-accessory-group:not(.goldmate-vd-enhanced) {
+	display: flex;
+	flex-direction: column;
+	gap: 0.35em;
+	width: 100%;
+	max-width: 100%;
+	min-width: 0;
+}
+
+.goldmate-accessories .goldmate-accessory-label {
+	font-weight: 600;
+	font-size: 0.95em;
+}
+
+.goldmate-accessories .goldmate-accessory-select {
+	width: 100%;
+	max-width: 100%;
+	min-height: 2.5em;
+}
+
+.goldmate-accessories .goldmate-accessory-total {
+	font-size: 1.05em;
+	font-weight: 600;
+	padding-top: 0.25em;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.35em;
+	align-items: baseline;
+	max-width: 100%;
+	min-width: 0;
+}
+
+.goldmate-accessories .goldmate-accessory-total[hidden] {
+	display: none !important;
+}
+
+.goldmate-cart-accessory-tag {
+	opacity: 0.75;
+	font-weight: 600;
+}

@@ -13,12 +13,18 @@ class Goldmate_Product_Fields {
 	 * Registers the product and variation field UI and their save handlers.
 	 */
 	public static function init() {
-
+		
 		add_action( 'woocommerce_product_options_pricing', array( __CLASS__, 'render_product_fields' ) );
 		add_action( 'woocommerce_process_product_meta', array( __CLASS__, 'save_product_fields' ), 10 );
 
 		add_action( 'woocommerce_variation_options_pricing', array( __CLASS__, 'render_variation_fields' ), 10, 3 );
 		add_action( 'woocommerce_save_product_variation', array( __CLASS__, 'save_variation_fields' ), 10, 2 );
+		add_filter(
+			'woocommerce_available_variation',
+			array(__CLASS__, 'add_goldmate_variation_data'),
+			10,
+			3
+		);
 	}
 
 	/**
@@ -221,5 +227,37 @@ class Goldmate_Product_Fields {
 
 			update_post_meta( $variation_id, $key, goldmate_positive_float( $raw ) );
 		}
+	}
+	public static function add_goldmate_variation_data(
+		$data,
+		$product,
+		$variation
+	) {
+
+		$weight = get_post_meta(
+			$variation->get_id(),
+			'_goldmate_weight',
+			true
+		);
+
+		/*
+		* If variation doesn't have its own weight,
+		* use the parent product weight.
+		*/
+		if ($weight === '') {
+
+			$weight = get_post_meta(
+				$product->get_id(),
+				'_goldmate_weight',
+				true
+			);
+
+		}
+
+		$data['goldmate_weight'] = $weight !== ''
+			? (float) $weight
+			: 0;
+
+		return $data;
 	}
 }
