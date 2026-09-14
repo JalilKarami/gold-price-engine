@@ -19,7 +19,7 @@ if ( ! defined( 'WP_UNINSTALL_PLUGIN' ) ) {
  */
 function goldmate_uninstall_clear_jobs() {
 
-	$hooks = array( 'goldmate_fetch_rate', 'goldmate_batch_step' );
+	$hooks = array( 'goldmate_fetch_rate', 'goldmate_batch_step', 'goldmate_fetch_rate_items', 'goldmate_check_price_validity', 'goldmate_auto_cancel_order' );
 
 	foreach ( $hooks as $hook ) {
 
@@ -60,6 +60,9 @@ function goldmate_uninstall_delete_data() {
 			$wpdb->esc_like( '_goldmate_' ) . '%'
 		)
 	);
+
+	$wpdb->query( 'DROP TABLE IF EXISTS ' . $wpdb->prefix . 'goldmate_rate_history' ); // phpcs:ignore
+	$wpdb->query( 'DROP TABLE IF EXISTS ' . $wpdb->prefix . 'goldmate_rate_items' ); // phpcs:ignore
 
 	if ( function_exists( 'wc_delete_product_transients' ) ) {
 		wc_delete_product_transients();

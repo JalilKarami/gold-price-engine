@@ -182,11 +182,17 @@ class Goldmate_Rates {
 	/**
 	 * Reads the configured endpoint's settings.
 	 *
+	 * @param string $which `primary` or `fallback`.
 	 * @return array
 	 */
-	protected static function config() {
+	protected static function config( $which = 'primary' ) {
+
+		if ( 'fallback' === $which ) {
+			return self::fallback_config();
+		}
 
 		return array(
+			'provider'   => (string) goldmate_option( 'goldmate_rate_source' ),
 			'url'        => trim( (string) goldmate_option( 'goldmate_api_url' ) ),
 			'key'        => trim( (string) goldmate_option( 'goldmate_api_key' ) ),
 			'key_header' => trim( (string) goldmate_option( 'goldmate_api_key_header' ) ),
@@ -198,33 +204,166 @@ class Goldmate_Rates {
 	}
 
 	/**
-	 * Requests the current rate from the configured endpoint.
+	 * Builds the fallback source config from its preset or custom fields.
 	 *
-	 * There is deliberately no automatic failover: when a source misbehaves the
-	 * shop chooses the replacement, so nobody is ever priced against a provider
-	 * they did not pick. Switching source in the admin refills the fields from
-	 * that provider's preset.
+	 * @return array|null Null when fallback is disabled or mirrors the primary.
+	 */
+	protected static function fallback_config() {
+
+		$fallback = (string) goldmate_option( 'goldmate_fallback_source' );
+		$primary  = (string) goldmate_option( 'goldmate_rate_source' );
+
+		if ( '' === $fallback || 'none' === $fallback || $fallback === $primary ) {
+			return null;
+		}
+
+		$presets = self::presets();
+
+		if ( 'custom' === $fallback ) {
+			return array(
+				'provider'   => 'custom',
+				'url'        => trim( (string) goldmate_option( 'goldmate_fallback_api_url' ) ),
+				'key'        => self::fallback_key(),
+				'key_header' => trim( (string) goldmate_option( 'goldmate_fallback_api_key_header' ) ),
+				'path'       => (string) goldmate_option( 'goldmate_fallback_api_path' ),
+				'multiplier' => (float) goldmate_option( 'goldmate_fallback_api_multiplier' ),
+				'time_path'  => trim( (string) goldmate_option( 'goldmate_fallback_api_time_path' ) ),
+				'max_age'    => (int) goldmate_option( 'goldmate_fallback_api_max_age' ),
+			);
+		}
+
+		if ( ! isset( $presets[ $fallback ] ) || empty( $presets[ $fallback ]['url'] ) ) {
+			return null;
+		}
+
+		$preset = $presets[ $fallback ];
+
+		return array(
+			'provider'   => $fallback,
+			'url'        => (string) $preset['url'],
+			'key'        => self::fallback_key(),
+			'key_header' => isset( $preset['key_header'] ) ? (string) $preset['key_header'] : '',
+			'path'       => isset( $preset['path'] ) ? (string) $preset['path'] : '',
+			'multiplier' => isset( $preset['multiplier'] ) ? (float) $preset['multiplier'] : 1,
+			'time_path'  => isset( $preset['time_path'] ) ? (string) $preset['time_path'] : '',
+			'max_age'    => isset( $preset['max_age'] ) ? (int) $preset['max_age'] : 0,
+		);
+	}
+
+	/**
+	 * API key for the fallback source: dedicated key, else primary key.
 	 *
-	 * @return array{rate: float, error: string, raw: string}
+	 * @return string
+	 */
+	protected static function fallback_key() {
+
+		$own = trim( (string) goldmate_option( 'goldmate_fallback_api_key' ) );
+
+		if ( '' !== $own ) {
+			return $own;
+		}
+
+		return trim( (string) goldmate_option( 'goldmate_api_key' ) );
+	}
+
+	/**
+	 * Applies shop markup/markdown to a fetched rate.
+	 *
+	 * @param float $rate Raw rate from the provider.
+	 * @return float
+	 */
+	public static function apply_rate_adjust( $rate ) {
+
+		$rate = goldmate_positive_float( $rate );
+		$mode = (string) goldmate_option( 'goldmate_rate_adjust_mode' );
+		$adj  = goldmate_signed_float( goldmate_option( 'goldmate_rate_adjust_value' ) );
+
+		if ( $rate <= 0 || 'none' === $mode || 0.0 === $adj ) {
+			return $rate;
+		}
+
+		if ( 'pct' === $mode ) {
+			$rate = $rate * ( 1 + ( $adj / 100 ) );
+		} elseif ( 'fixed' === $mode ) {
+			$rate = $rate + $adj;
+		}
+
+		return goldmate_positive_float( $rate );
+	}
+
+	/**
+	 * Requests the current rate from the configured endpoint, then the fallback.
+	 *
+	 * @return array{rate: float, error: string, raw: string, provider?: string, outcome?: string, attempts?: int, fallback_used?: bool}
 	 */
 	public static function fetch() {
 
 		if ( 'manual' === goldmate_option( 'goldmate_rate_source' ) ) {
 			return array(
-				'rate'  => 0.0,
-				'error' => 'دریافت خودکار غیرفعال است.',
-				'raw'   => '',
+				'rate'     => 0.0,
+				'error'    => 'دریافت خودکار غیرفعال است.',
+				'raw'      => '',
+				'provider' => 'manual',
+				'outcome'  => 'config',
 			);
 		}
 
-		return self::request( self::config() );
+		$primary = self::request( self::config( 'primary' ) );
+		$primary['provider'] = isset( $primary['provider'] ) ? $primary['provider'] : (string) goldmate_option( 'goldmate_rate_source' );
+
+		if ( '' === $primary['error'] ) {
+			$primary['rate']           = self::apply_rate_adjust( $primary['rate'] );
+			$primary['fallback_used']  = false;
+
+			if ( $primary['rate'] <= 0 ) {
+				$primary['error']   = 'پس از تنظیم نرخ، مقدار معتبر نیست.';
+				$primary['outcome'] = 'shape';
+				return $primary;
+			}
+
+			update_option( 'goldmate_rate_last_provider', $primary['provider'], false );
+			return $primary;
+		}
+
+		$fallback = self::fallback_config();
+
+		if ( null === $fallback ) {
+			return $primary;
+		}
+
+		$secondary = self::request( $fallback );
+		$secondary['provider']      = $fallback['provider'];
+		$secondary['fallback_used'] = true;
+		$secondary['primary_error'] = $primary['error'];
+
+		if ( '' !== $secondary['error'] ) {
+			$secondary['error'] = sprintf(
+				'منبع اصلی ناموفق (%s)؛ جایگزین هم ناموفق: %s',
+				$primary['error'],
+				$secondary['error']
+			);
+			return $secondary;
+		}
+
+		$secondary['rate'] = self::apply_rate_adjust( $secondary['rate'] );
+
+		if ( $secondary['rate'] <= 0 ) {
+			$secondary['error']   = 'پس از تنظیم نرخ جایگزین، مقدار معتبر نیست.';
+			$secondary['outcome'] = 'shape';
+			return $secondary;
+		}
+
+		update_option( 'goldmate_rate_last_provider', $secondary['provider'], false );
+		update_option( 'goldmate_rate_last_fallback_at', time(), false );
+
+		return $secondary;
 	}
 
 	/**
 	 * Performs one endpoint's request and turns its response into a rate.
 	 *
 	 * @param array $config One source's settings, as built by config().
-	 * @return array{rate: float, error: string, raw: string, outcome: string, attempts: int}
+	 * @return array{rate: float, error: string, raw: string, outcome: string, attempts: int, provider?: string}
 	 */
 	protected static function request( $config ) {
 
@@ -234,6 +373,7 @@ class Goldmate_Rates {
 			'raw'      => '',
 			'outcome'  => 'ok',
 			'attempts' => 0,
+			'provider' => isset( $config['provider'] ) ? (string) $config['provider'] : '',
 		);
 
 		$url = $config['url'];
@@ -556,6 +696,24 @@ class Goldmate_Rates {
 			return;
 		}
 
+		// Prefer writing through the rate-items catalog (gold18).
+		if ( class_exists( 'Goldmate_Rate_Items' ) ) {
+			$item = Goldmate_Rate_Items::get_by_slug( Goldmate_Rate_Items::DEFAULT_SLUG );
+			if ( $item ) {
+				Goldmate_Rate_Items::set_rate(
+					(int) $item['id'],
+					$rate,
+					$source,
+					array(
+						'provider' => 'auto' === $source
+							? (string) get_option( 'goldmate_rate_last_provider', goldmate_option( 'goldmate_rate_source' ) )
+							: '',
+					)
+				);
+				return;
+			}
+		}
+
 		$previous = goldmate_positive_float( goldmate_option( 'goldmate_rate_per_gram' ) );
 
 		update_option( 'goldmate_rate_per_gram', $rate );
@@ -564,15 +722,23 @@ class Goldmate_Rates {
 		update_option( 'goldmate_rate_last_error', '', false );
 		delete_option( 'goldmate_pending_rate' );
 
-		// History answers "what rate did this invoice use", so only real changes
-		// belong in it. An hourly fetch that returns the same number all evening
-		// would otherwise bury the actual moves under identical rows; every
-		// attempt is recorded in the fetch log instead.
 		if ( abs( $rate - $previous ) > 0.0001 ) {
 
 			self::record_history( $rate, $source );
 
-			Goldmate_Batch::start( 'auto' === $source ? 'دریافت خودکار قیمت روز' : 'تغییر دستی قیمت روز' );
+			$allow_batch = false;
+
+			if ( 'auto' === $source && 'yes' === goldmate_option( 'goldmate_reprice_on_cron' ) ) {
+				$allow_batch = true;
+			}
+
+			if ( 'manual' === $source && 'yes' === goldmate_option( 'goldmate_reprice_on_manual_fetch' ) ) {
+				$allow_batch = true;
+			}
+
+			if ( $allow_batch && 'yes' === goldmate_option( 'goldmate_reprice_on_all_items_save' ) ) {
+				Goldmate_Batch::start( 'auto' === $source ? 'دریافت خودکار قیمت روز' : 'تغییر دستی قیمت روز' );
+			}
 		}
 	}
 
@@ -602,12 +768,18 @@ class Goldmate_Rates {
 				// than its label, so a renamed preset still resolves correctly for
 				// old rows; an unrecognised key (a since-removed custom preset)
 				// just falls back to printing itself.
-				'provider' => 'auto' === $source ? (string) goldmate_option( 'goldmate_rate_source' ) : '',
+				'provider' => 'auto' === $source
+					? (string) get_option( 'goldmate_rate_last_provider', goldmate_option( 'goldmate_rate_source' ) )
+					: '',
 				'user'     => get_current_user_id(),
 			)
 		);
 
 		update_option( self::HISTORY_KEY, array_slice( $history, 0, self::HISTORY_MAX ), false );
+
+		if ( class_exists( 'Goldmate_General' ) ) {
+			Goldmate_General::prune_rate_history();
+		}
 	}
 
 	/**
@@ -645,11 +817,13 @@ class Goldmate_Rates {
 		array_unshift(
 			$log,
 			array(
-				'at'       => time(),
-				'outcome'  => $outcome,
-				'rate'     => isset( $result['rate'] ) ? (float) $result['rate'] : 0.0,
-				'error'    => isset( $result['error'] ) ? mb_substr( (string) $result['error'], 0, 300 ) : '',
-				'attempts' => isset( $result['attempts'] ) ? (int) $result['attempts'] : 0,
+				'at'            => time(),
+				'outcome'       => $outcome,
+				'rate'          => isset( $result['rate'] ) ? (float) $result['rate'] : 0.0,
+				'error'         => isset( $result['error'] ) ? mb_substr( (string) $result['error'], 0, 300 ) : '',
+				'attempts'      => isset( $result['attempts'] ) ? (int) $result['attempts'] : 0,
+				'provider'      => isset( $result['provider'] ) ? (string) $result['provider'] : (string) goldmate_option( 'goldmate_rate_source' ),
+				'fallback_used' => ! empty( $result['fallback_used'] ),
 			)
 		);
 

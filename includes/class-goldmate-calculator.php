@@ -14,7 +14,7 @@ class Goldmate_Calculator {
 	 *
 	 * Formula:
 	 *   gold   = weight × per-gram rate adjusted for karat
-	 *   wage   = gold × wage percentage
+	 *   wage   = gold × wage%  OR  weight × fixed Toman/gram
 	 *   profit = (gold + wage) × profit percentage
 	 *   tax    = (wage + profit [+ accessories]) × tax percentage
 	 *   total  = gold + wage + profit + accessories + tax
@@ -30,51 +30,272 @@ class Goldmate_Calculator {
 			return false;
 		}
 
-		$rate_18 = goldmate_positive_float( goldmate_option( 'goldmate_rate_per_gram' ) );
+		$item = null;
+		if ( class_exists( 'Goldmate_Rate_Items' ) ) {
+			$item = Goldmate_Rate_Items::for_product( (int) $product_id );
+		}
+
+		if ( $item ) {
+			$rate_18 = Goldmate_Rate_Items::rate_18_for_calculator( $item );
+			$inputs['rate_item']       = $item['slug'];
+			$inputs['rate_item_id']    = (int) $item['id'];
+			$inputs['skip_karat_scale'] = ! Goldmate_Rate_Items::uses_karat_scale( $item );
+
+			// Per-item default profit/tax when product has no override.
+			if ( '' === (string) $inputs['profit_pct'] && $item['profit_pct'] > 0 ) {
+				$inputs['profit_pct'] = $item['profit_pct'];
+			}
+			if ( empty( $inputs['tax_exempt'] ) && isset( $item['tax_pct'] ) && $item['tax_pct'] >= 0 ) {
+				$inputs['item_tax_pct'] = $item['tax_pct'];
+			}
+		} else {
+			$rate_18 = goldmate_positive_float( goldmate_option( 'goldmate_rate_per_gram' ) );
+		}
 
 		if ( $rate_18 <= 0 ) {
 			return false;
 		}
 
-		$profit_pct      = goldmate_positive_float( goldmate_option( 'goldmate_profit_pct' ) );
-		$tax_pct         = goldmate_positive_float( goldmate_option( 'goldmate_tax_pct' ) );
+		return self::calculate_from_inputs( $inputs, $rate_18, (int) $product_id );
+	}
+
+	/**
+	 * Runs the formula from already-resolved inputs (products or visitor calculator).
+	 *
+	 * @param array $inputs     weight, karat, wage_mode, wage_pct, wage_fixed, accessories.
+	 * @param float $rate_18    Toman per gram of 18-karat gold.
+	 * @param int   $product_id Optional product ID for filters; 0 for ad-hoc.
+	 * @return array|false
+	 */
+	public static function calculate_from_inputs( $inputs, $rate_18, $product_id = 0 ) {
+
+		$rate_18 = goldmate_positive_float( $rate_18 );
+		$weight  = goldmate_positive_float( isset( $inputs['weight'] ) ? $inputs['weight'] : 0 );
+		$karat   = goldmate_positive_float( isset( $inputs['karat'] ) ? $inputs['karat'] : 18 );
+
+		if ( $rate_18 <= 0 || $weight <= 0 ) {
+			return false;
+		}
+
+		if ( $karat <= 0 ) {
+			$karat = 18;
+		}
+
+		$wage_mode  = self::normalize_wage_mode( isset( $inputs['wage_mode'] ) ? $inputs['wage_mode'] : 'pct' );
+		$wage_pct   = goldmate_positive_float( isset( $inputs['wage_pct'] ) ? $inputs['wage_pct'] : 0 );
+		$wage_fixed = goldmate_positive_float( isset( $inputs['wage_fixed'] ) ? $inputs['wage_fixed'] : 0 );
+		$stone      = goldmate_positive_float( isset( $inputs['stone'] ) ? $inputs['stone'] : 0 );
+		$leather    = goldmate_positive_float( isset( $inputs['leather'] ) ? $inputs['leather'] : 0 );
+		$accessories = goldmate_positive_float( isset( $inputs['accessories'] ) ? $inputs['accessories'] : 0 );
+
+		if ( $accessories <= 0 && ( $stone > 0 || $leather > 0 ) ) {
+			$accessories = $stone + $leather;
+		}
+
+		$profit_pct = goldmate_positive_float(
+			isset( $inputs['profit_pct'] ) && '' !== (string) $inputs['profit_pct']
+				? $inputs['profit_pct']
+				: goldmate_option( 'goldmate_profit_pct' )
+		);
+		$tax_exempt      = ! empty( $inputs['tax_exempt'] );
+		$tax_pct         = $tax_exempt ? 0.0 : goldmate_positive_float( goldmate_option( 'goldmate_tax_pct' ) );
+		if ( ! $tax_exempt && isset( $inputs['item_tax_pct'] ) && '' !== (string) $inputs['item_tax_pct'] ) {
+			$tax_pct = goldmate_positive_float( $inputs['item_tax_pct'] );
+		}
 		$tax_accessories = 'yes' === goldmate_option( 'goldmate_tax_accessories' );
+		$tax_method      = (string) goldmate_option( 'goldmate_tax_method' );
+		$tax_on_wage     = 'yes' === goldmate_option( 'goldmate_tax_on_wage' );
+		$tax_on_profit   = 'yes' === goldmate_option( 'goldmate_tax_on_profit' );
 		$round_to        = goldmate_positive_float( goldmate_option( 'goldmate_round_to' ) );
 		$round_mode      = goldmate_option( 'goldmate_round_mode' );
 
+		if ( 'yes' !== goldmate_option( 'goldmate_round_prices' ) ) {
+			$round_to = 0;
+		} elseif ( $round_to <= 0 ) {
+			$round_to = goldmate_positive_float( goldmate_option( 'goldmate_strip_below' ) );
+		}
+
+		if ( 'none' === $tax_method ) {
+			$tax_pct = 0.0;
+		} elseif ( 'selective' === $tax_method && ! $tax_exempt ) {
+			$allowed = goldmate_option( 'goldmate_tax_selective_karats' );
+			if ( ! is_array( $allowed ) ) {
+				$allowed = array();
+			}
+			$karat_key = (string) (int) round( $karat );
+			if ( ! in_array( $karat_key, array_map( 'strval', $allowed ), true ) ) {
+				$tax_pct = 0.0;
+			}
+		}
+
+		$discounts = array( 'enabled' => false, 'items' => array() );
+		if ( $product_id > 0 && class_exists( 'Goldmate_Discounts' ) ) {
+			$discounts = Goldmate_Discounts::resolve( $product_id );
+		} elseif ( ! empty( $inputs['discounts'] ) && is_array( $inputs['discounts'] ) ) {
+			$discounts = $inputs['discounts'];
+		}
+
 		// Karat scales linearly against the 18-karat reference (750/1000 purity).
-		$rate = $rate_18 * ( $inputs['karat'] / 18 );
+		if ( ! empty( $inputs['skip_karat_scale'] ) ) {
+			$rate = $rate_18;
+		} else {
+			$rate = $rate_18 * ( $karat / 18 );
+		}
+		$rate_before_discount = $rate;
+		$discount_rate = 0.0;
 
-		$gold   = $inputs['weight'] * $rate;
-		$wage   = $gold * ( $inputs['wage_pct'] / 100 );
-		$profit = ( $gold + $wage ) * ( $profit_pct / 100 );
+		if ( class_exists( 'Goldmate_Discounts' ) && Goldmate_Discounts::is_active( $discounts, 'rate' ) ) {
+			$d = Goldmate_Discounts::apply_one(
+				$rate,
+				$discounts['items']['rate']['type'],
+				$discounts['items']['rate']['amount']
+			);
+			$rate          = $d['amount'];
+			$discount_rate = $d['discount'];
+		}
 
-		$taxable = $wage + $profit;
+		$gold = $weight * $rate;
+		$gold_before_discount = $gold;
+
+		if ( 'fixed' === $wage_mode ) {
+			$wage = $weight * $wage_fixed;
+		} elseif ( 'combined' === $wage_mode ) {
+			$wage = ( $weight * $wage_fixed ) + ( $gold * ( $wage_pct / 100 ) );
+		} else {
+			$wage = $gold * ( $wage_pct / 100 );
+		}
+		$wage_before_discount = $wage;
+
+		// Custom formula components (before profit so they can feed into it).
+		$components = array(
+			'lines'       => array(),
+			'total'       => 0.0,
+			'taxable'     => 0.0,
+			'profit_base' => 0.0,
+		);
+		if ( class_exists( 'Goldmate_Components' ) ) {
+			$components = Goldmate_Components::compute( $inputs, $gold, $wage, $product_id );
+		}
+
+		$profit = ( $gold + $wage + $components['profit_base'] ) * ( $profit_pct / 100 );
+		$profit_before_discount = $profit;
+
+		$accessories_before = $accessories;
+		if ( class_exists( 'Goldmate_Discounts' ) && Goldmate_Discounts::is_active( $discounts, 'accessories_per_gram' ) ) {
+			$per = $discounts['items']['accessories_per_gram'];
+			$cut = Goldmate_Discounts::apply_one(
+				$accessories,
+				'fixed' === $per['type'] ? 'fixed' : 'pct',
+				'fixed' === $per['type'] ? ( $per['amount'] * $weight ) : $per['amount']
+			);
+			$accessories = $cut['amount'];
+		}
+
+		$discount_map = array(
+			'rate'                 => $discount_rate * $weight,
+			'wage'                 => 0.0,
+			'profit'               => 0.0,
+			'gold'                 => 0.0,
+			'accessories'          => 0.0,
+			'gold_and_accessories' => 0.0,
+			'accessories_per_gram' => max( 0, $accessories_before - $accessories ),
+			'total'                => 0.0,
+		);
+
+		if ( class_exists( 'Goldmate_Discounts' ) ) {
+			if ( Goldmate_Discounts::is_active( $discounts, 'wage' ) ) {
+				$d = Goldmate_Discounts::apply_one( $wage, $discounts['items']['wage']['type'], $discounts['items']['wage']['amount'] );
+				$wage                 = $d['amount'];
+				$discount_map['wage'] = $d['discount'];
+			}
+			if ( Goldmate_Discounts::is_active( $discounts, 'profit' ) ) {
+				$d = Goldmate_Discounts::apply_one( $profit, $discounts['items']['profit']['type'], $discounts['items']['profit']['amount'] );
+				$profit                 = $d['amount'];
+				$discount_map['profit'] = $d['discount'];
+			}
+			if ( Goldmate_Discounts::is_active( $discounts, 'gold' ) ) {
+				$d = Goldmate_Discounts::apply_one( $gold, $discounts['items']['gold']['type'], $discounts['items']['gold']['amount'] );
+				$gold                 = $d['amount'];
+				$discount_map['gold'] = $d['discount'];
+			}
+			if ( Goldmate_Discounts::is_active( $discounts, 'accessories' ) ) {
+				$d = Goldmate_Discounts::apply_one( $accessories, $discounts['items']['accessories']['type'], $discounts['items']['accessories']['amount'] );
+				$discount_map['accessories'] = $d['discount'];
+				$accessories                 = $d['amount'];
+			}
+			if ( Goldmate_Discounts::is_active( $discounts, 'gold_and_accessories' ) ) {
+				$base = $gold + $accessories;
+				$d    = Goldmate_Discounts::apply_one( $base, $discounts['items']['gold_and_accessories']['type'], $discounts['items']['gold_and_accessories']['amount'] );
+				$discount_map['gold_and_accessories'] = $d['discount'];
+				if ( $base > 0 ) {
+					$ratio       = $d['amount'] / $base;
+					$gold        = $gold * $ratio;
+					$accessories = $accessories * $ratio;
+				}
+			}
+		}
+
+		$taxable = $components['taxable'];
+		if ( $tax_on_wage ) {
+			$taxable += $wage;
+		}
+		if ( $tax_on_profit ) {
+			$taxable += $profit;
+		}
 		if ( $tax_accessories ) {
-			$taxable += $inputs['accessories'];
+			$taxable += $accessories;
 		}
 
 		$tax = $taxable * ( $tax_pct / 100 );
 
-		$total = $gold + $wage + $profit + $inputs['accessories'] + $tax;
+		$total = $gold + $wage + $profit + $accessories + $components['total'] + $tax;
+
+		if ( class_exists( 'Goldmate_Discounts' ) && Goldmate_Discounts::is_active( $discounts, 'total' ) ) {
+			$d = Goldmate_Discounts::apply_one( $total, $discounts['items']['total']['type'], $discounts['items']['total']['amount'] );
+			$discount_map['total'] = $d['discount'];
+			$total                 = $d['amount'];
+		}
+
 		$total = self::round_total( $total, $round_to, $round_mode );
 
+		$discount_total = 0.0;
+		foreach ( $discount_map as $amt ) {
+			$discount_total += (float) $amt;
+		}
+
 		$breakdown = array(
-			'product_id'      => (int) $product_id,
-			'weight'          => $inputs['weight'],
-			'karat'           => $inputs['karat'],
-			'rate_18'         => $rate_18,
-			'rate'            => $rate,
-			'gold'            => $gold,
-			'wage'            => $wage,
-			'wage_pct'        => $inputs['wage_pct'],
-			'profit'          => $profit,
-			'profit_pct'      => $profit_pct,
-			'accessories'     => $inputs['accessories'],
-			'tax'             => $tax,
-			'tax_pct'         => $tax_pct,
-			'tax_accessories' => $tax_accessories,
-			'total'           => $total,
+			'product_id'            => (int) $product_id,
+			'weight'                => $weight,
+			'karat'                 => $karat,
+			'rate_18'               => $rate_18,
+			'rate'                  => $rate,
+			'rate_before_discount'  => $rate_before_discount,
+			'gold'                  => $gold,
+			'gold_before_discount'  => $gold_before_discount,
+			'wage'                  => $wage,
+			'wage_before_discount'  => $wage_before_discount,
+			'wage_mode'             => $wage_mode,
+			'wage_pct'              => $wage_pct,
+			'wage_fixed'            => $wage_fixed,
+			'profit'                => $profit,
+			'profit_before_discount'=> $profit_before_discount,
+			'profit_pct'            => $profit_pct,
+			'stone'                 => $stone,
+			'leather'               => $leather,
+			'accessories'           => $accessories,
+			'accessories_before_discount' => $accessories_before,
+			'components'            => $components['lines'],
+			'components_total'      => $components['total'],
+			'tax'                   => $tax,
+			'tax_pct'               => $tax_pct,
+			'tax_exempt'            => $tax_exempt,
+			'tax_accessories'       => $tax_accessories,
+			'rate_item'             => isset( $inputs['rate_item'] ) ? (string) $inputs['rate_item'] : '',
+			'skip_karat_scale'      => ! empty( $inputs['skip_karat_scale'] ),
+			'discounts_enabled'     => ! empty( $discounts['enabled'] ),
+			'discount_map'          => $discount_map,
+			'discount_total'        => $discount_total,
+			'total'                 => $total,
 		);
 
 		/**
@@ -84,6 +305,51 @@ class Goldmate_Calculator {
 		 * @param int   $product_id Product or variation ID.
 		 */
 		return apply_filters( 'goldmate_breakdown', $breakdown, $product_id );
+	}
+
+	/**
+	 * Normalises a wage mode string to `pct`, `fixed`, or `combined`.
+	 *
+	 * @param mixed $mode Raw mode.
+	 * @return string
+	 */
+	public static function normalize_wage_mode( $mode ) {
+
+		$mode = (string) $mode;
+
+		if ( 'fixed' === $mode || 'combined' === $mode ) {
+			return $mode;
+		}
+
+		return 'pct';
+	}
+
+	/**
+	 * Human-readable wage row label for a breakdown.
+	 *
+	 * @param array $b Breakdown from calculate().
+	 * @return string
+	 */
+	public static function wage_label( $b ) {
+
+		$mode = self::normalize_wage_mode( isset( $b['wage_mode'] ) ? $b['wage_mode'] : 'pct' );
+
+		if ( 'fixed' === $mode ) {
+			return sprintf(
+				'اجرت (%s تومان/گرم)',
+				wc_format_localized_decimal( isset( $b['wage_fixed'] ) ? $b['wage_fixed'] : 0 )
+			);
+		}
+
+		if ( 'combined' === $mode ) {
+			return sprintf(
+				'اجرت ترکیبی (%s تومان/گرم + %s٪)',
+				wc_format_localized_decimal( isset( $b['wage_fixed'] ) ? $b['wage_fixed'] : 0 ),
+				wc_format_localized_decimal( isset( $b['wage_pct'] ) ? $b['wage_pct'] : 0 )
+			);
+		}
+
+		return sprintf( 'اجرت (%s٪)', wc_format_localized_decimal( isset( $b['wage_pct'] ) ? $b['wage_pct'] : 0 ) );
 	}
 
 	/**
@@ -123,6 +389,24 @@ class Goldmate_Calculator {
 			return goldmate_meta_float( $owner_id, $key );
 		};
 
+		$read_mode = function () use ( $product_id, $owner_id, $is_variant ) {
+
+			if ( $is_variant ) {
+				$own = get_post_meta( $product_id, '_goldmate_wage_mode', true );
+				if ( '' !== trim( (string) $own ) ) {
+					return self::normalize_wage_mode( $own );
+				}
+			}
+
+			$parent_mode = get_post_meta( $owner_id, '_goldmate_wage_mode', true );
+
+			if ( '' !== trim( (string) $parent_mode ) ) {
+				return self::normalize_wage_mode( $parent_mode );
+			}
+
+			return self::normalize_wage_mode( goldmate_option( 'goldmate_default_wage_mode' ) );
+		};
+
 		$weight = $read( '_goldmate_weight' );
 
 		if ( $weight <= 0 ) {
@@ -135,11 +419,41 @@ class Goldmate_Calculator {
 			$karat = 18;
 		}
 
+		$stone   = $read( '_goldmate_stone' );
+		$leather = $read( '_goldmate_leather' );
+		$accessories = $read( '_goldmate_accessories' );
+
+		if ( $accessories <= 0 && ( $stone > 0 || $leather > 0 ) ) {
+			$accessories = $stone + $leather;
+		} elseif ( $stone <= 0 && $leather <= 0 && $accessories > 0 ) {
+			// Legacy products stored a single accessories total as "stone" for display.
+			$stone = $accessories;
+		}
+
+		$profit_meta = '';
+		if ( $is_variant ) {
+			$own_profit = get_post_meta( $product_id, '_goldmate_profit_pct', true );
+			if ( '' !== trim( (string) $own_profit ) ) {
+				$profit_meta = $own_profit;
+			}
+		}
+		if ( '' === $profit_meta ) {
+			$profit_meta = get_post_meta( $owner_id, '_goldmate_profit_pct', true );
+		}
+
+		$tax_exempt = 'yes' === get_post_meta( $owner_id, '_goldmate_tax_exempt', true );
+
 		return array(
 			'weight'      => $weight,
 			'karat'       => $karat,
+			'wage_mode'   => $read_mode(),
 			'wage_pct'    => $read( '_goldmate_wage_pct' ),
-			'accessories' => $read( '_goldmate_accessories' ),
+			'wage_fixed'  => $read( '_goldmate_wage_fixed' ),
+			'stone'       => $stone,
+			'leather'     => $leather,
+			'accessories' => $accessories,
+			'profit_pct'  => '' !== trim( (string) $profit_meta ) ? goldmate_positive_float( $profit_meta ) : '',
+			'tax_exempt'  => $tax_exempt,
 		);
 	}
 
@@ -191,20 +505,42 @@ class Goldmate_Calculator {
 				),
 				$b['gold'],
 			),
-			array( sprintf( 'اجرت (%s٪)', wc_format_localized_decimal( $b['wage_pct'] ) ), $b['wage'] ),
+			array( self::wage_label( $b ), $b['wage'] ),
 			array( sprintf( 'سود (%s٪)', wc_format_localized_decimal( $b['profit_pct'] ) ), $b['profit'] ),
 		);
 
 		if ( $b['accessories'] > 0 ) {
-			$rows[] = array( 'متعلقات', $b['accessories'] );
+			$split_ok = empty( $b['discount_map']['accessories'] )
+				&& empty( $b['discount_map']['accessories_per_gram'] )
+				&& empty( $b['discount_map']['gold_and_accessories'] )
+				&& ( ! empty( $b['stone'] ) || ! empty( $b['leather'] ) );
+
+			if ( $split_ok ) {
+				if ( ! empty( $b['stone'] ) && $b['stone'] > 0 ) {
+					$rows[] = array( 'سنگ', $b['stone'] );
+				}
+				if ( ! empty( $b['leather'] ) && $b['leather'] > 0 ) {
+					$rows[] = array( 'چرم و یراق', $b['leather'] );
+				}
+			} else {
+				$rows[] = array( 'ملحقات', $b['accessories'] );
+			}
 		}
 
-		$tax_base = $b['tax_accessories'] ? 'اجرت، سود و متعلقات' : 'اجرت و سود';
+		if ( ! empty( $b['components'] ) && is_array( $b['components'] ) ) {
+			foreach ( $b['components'] as $line ) {
+				$rows[] = array( $line['label'], $line['amount'] );
+			}
+		}
 
-		$rows[] = array(
-			sprintf( 'مالیات بر ارزش افزوده (%s٪ %s)', wc_format_localized_decimal( $b['tax_pct'] ), $tax_base ),
-			$b['tax'],
-		);
+		if ( empty( $b['tax_exempt'] ) || $b['tax'] > 0 ) {
+			$tax_base = $b['tax_accessories'] ? 'اجرت، سود و متعلقات' : 'اجرت و سود';
+
+			$rows[] = array(
+				sprintf( 'مالیات بر ارزش افزوده (%s٪ %s)', wc_format_localized_decimal( $b['tax_pct'] ), $tax_base ),
+				$b['tax'],
+			);
+		}
 
 		$rounding = self::rounding_difference( $b );
 
@@ -225,6 +561,14 @@ class Goldmate_Calculator {
 	public static function rounding_difference( $b ) {
 
 		$parts = $b['gold'] + $b['wage'] + $b['profit'] + $b['accessories'] + $b['tax'];
+		if ( ! empty( $b['components_total'] ) ) {
+			$parts += (float) $b['components_total'];
+		}
+		// Discount total is already reflected inside reduced component amounts,
+		// except a pure "total" discount which sits outside the parts.
+		if ( ! empty( $b['discount_map']['total'] ) ) {
+			$parts -= (float) $b['discount_map']['total'];
+		}
 
 		$difference = round( $b['total'] - $parts, 2 );
 

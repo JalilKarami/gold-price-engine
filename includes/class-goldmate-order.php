@@ -34,6 +34,8 @@ class Goldmate_Order {
 
 		// Orders keyed in by hand in wp-admin, or created over the REST API.
 		add_action( 'woocommerce_new_order_item', array( __CLASS__, 'on_new_order_item' ), 10, 3 );
+
+		add_filter( 'woocommerce_order_item_get_formatted_meta_data', array( __CLASS__, 'maybe_hide_email_meta' ), 10, 2 );
 	}
 
 	/**
@@ -87,7 +89,7 @@ class Goldmate_Order {
 
 			$rows['مبلغ طلا'] = self::plain_price( $b['gold'], $currency );
 
-			$rows[ sprintf( 'اجرت (%s٪)', wc_format_localized_decimal( $b['wage_pct'] ) ) ] = self::plain_price( $b['wage'], $currency );
+			$rows[ Goldmate_Calculator::wage_label( $b ) ] = self::plain_price( $b['wage'], $currency );
 
 			$rows[ sprintf( 'سود (%s٪)', wc_format_localized_decimal( $b['profit_pct'] ) ) ] = self::plain_price( $b['profit'], $currency );
 
@@ -261,5 +263,52 @@ class Goldmate_Order {
 		$data = is_array( $raw ) ? $raw : json_decode( (string) $raw, true );
 
 		return is_array( $data ) ? $data : false;
+	}
+
+	/**
+	 * Hides GoldMate breakdown rows inside customer emails when disabled.
+	 *
+	 * @param array         $formatted_meta Formatted meta.
+	 * @param WC_Order_Item $item           Item.
+	 * @return array
+	 */
+	public static function maybe_hide_email_meta( $formatted_meta, $item ) {
+
+		if ( 'yes' === goldmate_option( 'goldmate_details_email' ) ) {
+			return $formatted_meta;
+		}
+
+		// Only strip during email rendering, not on the thank-you / account pages.
+		if ( ! did_action( 'woocommerce_email_header' ) && ! doing_action( 'woocommerce_email_order_details' ) ) {
+			return $formatted_meta;
+		}
+
+		if ( ! self::get_snapshot( $item ) ) {
+			return $formatted_meta;
+		}
+
+		$keep = array();
+		foreach ( $formatted_meta as $key => $meta ) {
+			if ( isset( $meta->key ) && 0 === strpos( (string) $meta->key, '_' ) ) {
+				$keep[ $key ] = $meta;
+				continue;
+			}
+			// Drop visible GoldMate invoice labels (Persian keys without leading underscore).
+			if ( isset( $meta->key ) && in_array( $meta->key, array( 'وزن', 'عیار', 'متعلقات', 'گرد کردن', 'قیمت واحد' ), true ) ) {
+				continue;
+			}
+			if ( isset( $meta->key ) && (
+				false !== strpos( (string) $meta->key, 'قیمت هر گرم' )
+				|| false !== strpos( (string) $meta->key, 'مبلغ طلا' )
+				|| false !== strpos( (string) $meta->key, 'اجرت' )
+				|| false !== strpos( (string) $meta->key, 'سود' )
+				|| false !== strpos( (string) $meta->key, 'مالیات' )
+			) ) {
+				continue;
+			}
+			$keep[ $key ] = $meta;
+		}
+
+		return $keep;
 	}
 }

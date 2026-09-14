@@ -15,43 +15,106 @@ if ( ! defined( 'ABSPATH' ) ) {
 function goldmate_defaults() {
 	return array(
 		// Pricing.
-		'goldmate_rate_per_gram'   => 0,
-		'goldmate_profit_pct'      => 7,
-		'goldmate_tax_pct'         => 9,
-		'goldmate_tax_accessories' => 'no',
-		'goldmate_round_to'        => 1000,
-		'goldmate_round_mode'      => 'round',
-		'goldmate_wc_tax_status'   => 'none',
-		'goldmate_show_breakdown'  => 'yes',
-		'goldmate_show_formula'    => 'yes',
+		'goldmate_rate_per_gram'     => 0,
+		'goldmate_profit_pct'        => 7,
+		'goldmate_tax_pct'           => 9,
+		'goldmate_tax_accessories'   => 'no',
+		'goldmate_default_wage_mode' => 'pct',
+		'goldmate_round_to'          => 1000,
+		'goldmate_round_mode'        => 'round',
+		'goldmate_wc_tax_status'     => 'none',
+		'goldmate_show_breakdown'    => 'yes',
+		'goldmate_show_formula'      => 'yes',
 
 		// Cart, order and invoice detail.
-		'goldmate_cart_details'    => 'yes',
-		'goldmate_order_details'   => 'full',
+		'goldmate_cart_details'  => 'yes',
+		'goldmate_order_details' => 'full',
 
 		// Uninstall behaviour.
-		'goldmate_delete_data'     => 'no',
+		'goldmate_delete_data' => 'no',
+
+		// General (عمومی) — Ratesbox-style operational controls.
+		'goldmate_calc_mode'                  => 'store',
+		'goldmate_check_price_validity'       => 'yes',
+		'goldmate_reprice_on_cron'            => 'yes',
+		'goldmate_reprice_on_manual_fetch'    => 'yes',
+		'goldmate_reprice_on_item_save'       => 'yes',
+		'goldmate_reprice_on_all_items_save'  => 'yes',
+		'goldmate_reprice_on_product_save'    => 'yes',
+		'goldmate_reprice_on_add_to_cart'     => 'yes',
+		'goldmate_reprice_cart_on_add'        => 'no',
+		'goldmate_reprice_cart_on_cart'       => 'no',
+		'goldmate_reprice_cart_on_checkout'   => 'yes',
+		'goldmate_store_calc_time'            => 'yes',
+		'goldmate_recalc_only_on_change'      => 'no',
+		'goldmate_price_history_hours'        => 24,
+		'goldmate_history_per_page'           => 20,
+		'goldmate_round_prices'               => 'yes',
+		'goldmate_strip_below'                => 1,
+		'goldmate_details_admin'              => 'yes',
+		'goldmate_details_customer'           => 'yes',
+		'goldmate_details_email'              => 'no',
+		'goldmate_hide_price_change'          => 'no',
+		'goldmate_details_colleague'          => 'no',
+		'goldmate_colleague_role'             => '',
+		'goldmate_admin_email'                => '',
+		'goldmate_max_price_validity'         => 240,
+		'goldmate_oos_shortcodes'             => 'no',
+		'goldmate_oos_manual_shortcodes'      => 'no',
+		'goldmate_oos_shortcode_text'         => 'خارج از سرویس',
+		'goldmate_oos_products'               => 'no',
+		'goldmate_oos_contact_url'            => '',
+		'goldmate_oos_product_text'           => 'تماس بگیرید',
+		'goldmate_ajax_shortcodes'            => 'yes',
+		'goldmate_ajax_shortcodes_enable'     => 'yes',
+		'goldmate_ajax_shortcodes_interval'   => 30,
+		'goldmate_ajax_products'              => 'yes',
+		'goldmate_ajax_products_interval'     => 60,
+		'goldmate_jewelry_rate_ref'           => 'gold_18',
+		'goldmate_wage_ref'                   => 'default',
+		'goldmate_tax_method'                 => 'all',
+		'goldmate_tax_on_wage'                => 'yes',
+		'goldmate_tax_on_profit'              => 'yes',
+		'goldmate_tax_selective_karats'       => array( '18', '24' ),
+		'goldmate_order_recalc'               => 'yes',
+		'goldmate_order_item_validity'        => 3,
+		'goldmate_order_auto_cancel'          => 'no',
+		'goldmate_order_auto_cancel_minutes'  => 30,
+		'goldmate_hide_shortcode_outofstock'  => 'yes',
 
 		// Automatic rate fetching.
-		'goldmate_rate_source'       => 'manual',
-		'goldmate_api_url'           => '',
-		'goldmate_api_key'           => '',
-		'goldmate_api_key_header'    => '',
-		'goldmate_api_path'          => '',
-		'goldmate_api_multiplier'    => 1,
-		'goldmate_api_time_path'     => '',
-		'goldmate_api_max_age'       => 0,
-		'goldmate_fetch_interval'    => 60,
-		'goldmate_max_deviation'     => 20,
-		'goldmate_min_change_pct'    => 0.4,
-		'goldmate_min_change_amount' => 0,
+		'goldmate_rate_source'           => 'manual',
+		'goldmate_api_url'               => '',
+		'goldmate_api_key'               => '',
+		'goldmate_api_key_header'        => '',
+		'goldmate_api_path'              => '',
+		'goldmate_api_multiplier'        => 1,
+		'goldmate_api_time_path'         => '',
+		'goldmate_api_max_age'           => 0,
+		'goldmate_fallback_source'       => 'none',
+		'goldmate_fallback_api_url'      => '',
+		'goldmate_fallback_api_key'      => '',
+		'goldmate_fallback_api_key_header' => '',
+		'goldmate_fallback_api_path'     => '',
+		'goldmate_fallback_api_multiplier' => 1,
+		'goldmate_fallback_api_time_path' => '',
+		'goldmate_fallback_api_max_age'  => 0,
+		'goldmate_rate_adjust_mode'      => 'none',
+		'goldmate_rate_adjust_value'     => 0,
+		'goldmate_fetch_interval'        => 60,
+		'goldmate_max_deviation'         => 20,
+		'goldmate_min_change_pct'        => 0.4,
+		'goldmate_min_change_amount'     => 0,
+
+		// Live storefront refresh (seconds; 0 disables). Synced from AJAX product interval.
+		'goldmate_live_interval' => 60,
 
 		// Staleness handling.
-		'goldmate_stale_hours'     => 24,
-		'goldmate_stale_action'    => 'notice',
+		'goldmate_stale_hours'  => 24,
+		'goldmate_stale_action' => 'notice',
 
 		// Fetch log retention.
-		'goldmate_log_days'        => 14,
+		'goldmate_log_days' => 14,
 	);
 }
 
@@ -143,7 +206,38 @@ function goldmate_plain_price( $amount, $currency = null ) {
  * @return string[]
  */
 function goldmate_numeric_meta_keys() {
-	return array( '_goldmate_weight', '_goldmate_karat', '_goldmate_wage_pct', '_goldmate_accessories' );
+	return array(
+		'_goldmate_weight',
+		'_goldmate_karat',
+		'_goldmate_wage_pct',
+		'_goldmate_wage_fixed',
+		'_goldmate_stone',
+		'_goldmate_leather',
+		'_goldmate_accessories',
+		'_goldmate_profit_pct',
+	);
+}
+
+/**
+ * Casts a value to a float without clamping at zero (for rate markup/markdown).
+ *
+ * @param mixed $value Raw value.
+ * @return float
+ */
+function goldmate_signed_float( $value ) {
+
+	if ( is_string( $value ) ) {
+		$value = goldmate_normalize_digits( $value );
+		$value = str_replace( array( ',', '،', ' ', ' ' ), '', $value );
+	}
+
+	$value = (float) $value;
+
+	if ( ! is_finite( $value ) ) {
+		return 0.0;
+	}
+
+	return $value;
 }
 
 /**

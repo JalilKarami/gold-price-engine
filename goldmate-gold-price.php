@@ -1,8 +1,8 @@
 <?php
 /**
  * Plugin Name: گلدمیت — محاسبه قیمت طلا
- * Description: محاسبه خودکار قیمت محصولات طلا بر اساس فرمول: وزن × (قیمت روز + اجرت) + سود + متعلقات + مالیات بر اجرت و سود. شامل پشتیبانی از محصولات متغیر، دریافت خودکار قیمت روز و به‌روزرسانی دسته‌ای.
- * Version: 2.8.3
+ * Description: محاسبه خودکار قیمت محصولات طلا بر اساس وزن، عیار، اجرت (درصدی یا ثابت)، سود، متعلقات و مالیات. شامل دریافت خودکار قیمت روز با منبع جایگزین، بروزرسانی دسته‌ای و نمایش آنی نرخ.
+ * Version: 3.4.1
  * Author: gold-mate.ir
  * Requires Plugins: woocommerce
  * WC requires at least: 7.0
@@ -15,12 +15,16 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'GOLDMATE_VERSION', '2.8.3' );
+define( 'GOLDMATE_VERSION', '3.4.5' );
 define( 'GOLDMATE_FILE', __FILE__ );
 define( 'GOLDMATE_PATH', plugin_dir_path( __FILE__ ) );
 define( 'GOLDMATE_URL', plugin_dir_url( __FILE__ ) );
 
 require_once GOLDMATE_PATH . 'includes/functions.php';
+require_once GOLDMATE_PATH . 'includes/class-goldmate-install.php';
+require_once GOLDMATE_PATH . 'includes/class-goldmate-rate-items.php';
+require_once GOLDMATE_PATH . 'includes/class-goldmate-fetcher.php';
+require_once GOLDMATE_PATH . 'includes/class-goldmate-admin-items.php';
 require_once GOLDMATE_PATH . 'includes/class-goldmate-calculator.php';
 require_once GOLDMATE_PATH . 'includes/class-goldmate-pricing.php';
 require_once GOLDMATE_PATH . 'includes/class-goldmate-batch.php';
@@ -29,6 +33,13 @@ require_once GOLDMATE_PATH . 'includes/class-goldmate-product-fields.php';
 require_once GOLDMATE_PATH . 'includes/class-goldmate-display.php';
 require_once GOLDMATE_PATH . 'includes/class-goldmate-order.php';
 require_once GOLDMATE_PATH . 'includes/class-goldmate-accessories.php';
+require_once GOLDMATE_PATH . 'includes/class-goldmate-live.php';
+require_once GOLDMATE_PATH . 'includes/class-goldmate-widgets.php';
+require_once GOLDMATE_PATH . 'includes/class-goldmate-shortcodes.php';
+require_once GOLDMATE_PATH . 'includes/class-goldmate-discounts.php';
+require_once GOLDMATE_PATH . 'includes/class-goldmate-components.php';
+require_once GOLDMATE_PATH . 'includes/class-goldmate-tools.php';
+require_once GOLDMATE_PATH . 'includes/class-goldmate-general.php';
 require_once GOLDMATE_PATH . 'includes/class-goldmate-settings.php';
 require_once GOLDMATE_PATH . 'includes/class-goldmate-admin.php';
 require_once GOLDMATE_PATH . 'includes/goldmate-variation-selector.php';
@@ -66,13 +77,21 @@ function goldmate_init() {
 		return;
 	}
 
+	Goldmate_Install::maybe_upgrade();
+
 	Goldmate_Pricing::init();
 	Goldmate_Batch::init();
 	Goldmate_Rates::init();
+	Goldmate_Fetcher::init();
 	Goldmate_Product_Fields::init();
 	Goldmate_Display::init();
 	Goldmate_Order::init();
 	Goldmate_Accessories::init();
+	Goldmate_Live::init();
+	Goldmate_Widgets::init();
+	Goldmate_Shortcodes::init();
+	Goldmate_Discounts::init();
+	Goldmate_General::init();
 	Goldmate_Admin::init();
 	Goldmate_Variation_Selector::init();
 }
@@ -83,7 +102,10 @@ add_action( 'plugins_loaded', 'goldmate_init' );
  */
 function goldmate_activate() {
 	require_once GOLDMATE_PATH . 'includes/functions.php';
+	require_once GOLDMATE_PATH . 'includes/class-goldmate-install.php';
+	require_once GOLDMATE_PATH . 'includes/class-goldmate-rate-items.php';
 	require_once GOLDMATE_PATH . 'includes/class-goldmate-rates.php';
+	Goldmate_Install::install();
 	Goldmate_Rates::reschedule();
 }
 register_activation_hook( __FILE__, 'goldmate_activate' );
@@ -94,8 +116,10 @@ register_activation_hook( __FILE__, 'goldmate_activate' );
 function goldmate_deactivate() {
 	require_once GOLDMATE_PATH . 'includes/functions.php';
 	require_once GOLDMATE_PATH . 'includes/class-goldmate-rates.php';
+	require_once GOLDMATE_PATH . 'includes/class-goldmate-fetcher.php';
 	require_once GOLDMATE_PATH . 'includes/class-goldmate-batch.php';
 	Goldmate_Rates::unschedule();
+	Goldmate_Fetcher::unschedule();
 	Goldmate_Batch::cancel();
 }
 register_deactivation_hook( __FILE__, 'goldmate_deactivate' );

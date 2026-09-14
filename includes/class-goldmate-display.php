@@ -51,6 +51,9 @@ class Goldmate_Display {
 	 * @return bool
 	 */
 	protected static function anything_enabled() {
+		if ( class_exists( 'Goldmate_General' ) && ! Goldmate_General::can_see_details() ) {
+			return false;
+		}
 		return self::breakdown_enabled() || self::formula_enabled();
 	}
 
@@ -239,14 +242,16 @@ class Goldmate_Display {
 	 */
 	protected static function applied_rate() {
 
+		if ( class_exists( 'Goldmate_Live' ) ) {
+			return Goldmate_Live::applied_rate();
+		}
+
 		if ( ! Goldmate_Batch::is_running() ) {
 			return goldmate_positive_float( goldmate_option( 'goldmate_rate_per_gram' ) );
 		}
 
 		$history = Goldmate_Rates::history();
 
-		// history[0] is the new rate the running batch is applying — not yet
-		// true for the whole catalogue. history[1] is the one it replaced.
 		return isset( $history[1]['rate'] ) ? goldmate_positive_float( $history[1]['rate'] ) : 0.0;
 	}
 
@@ -398,20 +403,27 @@ class Goldmate_Display {
 		$product = wc_get_product( $post_id );
 		$weight  = goldmate_meta_float( $post_id, '_goldmate_weight' );
 		$wage    = goldmate_meta_float( $post_id, '_goldmate_wage_pct' );
+		$mode    = get_post_meta( $post_id, '_goldmate_wage_mode', true );
+		$mode    = Goldmate_Calculator::normalize_wage_mode(
+			'' !== trim( (string) $mode ) ? $mode : goldmate_option( 'goldmate_default_wage_mode' )
+		);
+		$wage_label = ( 'fixed' === $mode )
+			? sprintf( 'اجرت %s ت/گ', wc_format_localized_decimal( goldmate_meta_float( $post_id, '_goldmate_wage_fixed' ) ) )
+			: sprintf( 'اجرت %s٪', wc_format_localized_decimal( $wage ) );
 
 		if ( $product && $product->is_type( 'variable' ) ) {
 			printf(
-				'<span title="وزن هر متغیر جداگانه تنظیم می‌شود">%s متغیر / اجرت %s٪</span>',
+				'<span title="وزن هر متغیر جداگانه تنظیم می‌شود">%s متغیر / %s</span>',
 				esc_html( number_format_i18n( count( $product->get_children() ) ) ),
-				esc_html( wc_format_localized_decimal( $wage ) )
+				esc_html( $wage_label )
 			);
 			return;
 		}
 
 		printf(
-			'%s گرم / اجرت %s٪',
+			'%s گرم / %s',
 			esc_html( wc_format_localized_decimal( $weight ) ),
-			esc_html( wc_format_localized_decimal( $wage ) )
+			esc_html( $wage_label )
 		);
 	}
 }

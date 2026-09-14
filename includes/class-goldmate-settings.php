@@ -16,9 +16,15 @@ class Goldmate_Settings {
 	 */
 	public static function tabs() {
 		return array(
-			'pricing' => 'قیمت‌گذاری',
-			'fetch'   => 'دریافت خودکار قیمت',
-			'status'  => 'وضعیت و ابزارها',
+			'general'    => 'عمومی',
+			'pricing'    => 'قیمت‌گذاری',
+			'fetch'      => 'تنظیمات فراخوانی قیمت',
+			'discounts'  => 'تخفیف',
+			'calculator' => 'ماشین‌حساب',
+			'components' => 'اجزای قیمت',
+			'shortcodes' => 'شورتکدها',
+			'tools'      => 'ابزارها',
+			'status'     => 'وضعیت',
 		);
 	}
 
@@ -32,11 +38,13 @@ class Goldmate_Settings {
 
 		$fields = array(
 
+			'general' => self::general_fields(),
+
 			'pricing' => array(
 				array(
 					'type'  => 'section',
 					'title' => 'فرمول قیمت',
-					'desc'  => 'وزن × قیمت هر گرم (متناسب با عیار) = مبلغ طلا؛ سپس اجرت، سود، متعلقات و مالیات به آن افزوده می‌شود.',
+					'desc'  => 'وزن × قیمت هر گرم (متناسب با عیار) = مبلغ طلا؛ سپس اجرت (درصدی یا ثابت تومان/گرم)، سود، متعلقات و مالیات به آن افزوده می‌شود.',
 				),
 				array(
 					'id'    => 'goldmate_rate_per_gram',
@@ -65,6 +73,17 @@ class Goldmate_Settings {
 					'type'  => 'checkbox',
 					'label' => 'ارزش سنگ و نگین هم مشمول مالیات بر ارزش افزوده شود',
 					'desc'  => 'پیش‌فرض خاموش است. پیش از تغییر، با حسابدار خود هماهنگ کنید.',
+				),
+				array(
+					'id'      => 'goldmate_default_wage_mode',
+					'title'   => 'نوع اجرت پیش‌فرض',
+					'type'    => 'select',
+					'options' => array(
+						'pct'      => 'درصدی از مبلغ طلا',
+						'fixed'    => 'رقم ثابت به ازای هر گرم (تومان)',
+						'combined' => 'ترکیبی (ثابت + درصد)',
+					),
+					'desc'    => 'برای محصولاتی که نوع اجرت را مشخص نکرده‌اند. هر محصول می‌تواند جداگانه درصدی یا ثابت باشد.',
 				),
 				array(
 					'type'  => 'section',
@@ -114,6 +133,13 @@ class Goldmate_Settings {
 					'type'  => 'checkbox',
 					'label' => 'فرمول محاسبه، همراه با اعداد همان محصول، زیر جدول نمایش داده شود',
 					'desc'  => 'مثال: (۵ گرم × ۳٬۵۰۰٬۰۰۰ تومان) + اجرت + سود + مالیات = قیمت نهایی. مستقل از جدول کار می‌کند؛ می‌توانید فقط فرمول را نشان دهید.',
+				),
+				array(
+					'id'    => 'goldmate_live_interval',
+					'title' => 'بروزرسانی آنی نرخ در فرانت (ثانیه)',
+					'type'  => 'number',
+					'step'  => '1',
+					'desc'  => 'بنر نرخ، تابلو و قیمت محصول بدون رفرش صفحه به‌روز می‌شود. کمینه عملی ۱۵ ثانیه است. عدد 0 یعنی غیرفعال. سبد خرید همچنان پس از اتمام به‌روزرسانی دسته‌ای قیمت ووکامرس را می‌گیرد.',
 				),
 				array(
 					'type'  => 'section',
@@ -225,6 +251,94 @@ class Goldmate_Settings {
 				),
 				array(
 					'type'  => 'section',
+					'title' => 'منبع جایگزین',
+					'desc'  => 'اگر منبع اصلی پاسخ ندهد یا قیمت کهنه باشد، همین دریافت از منبع جایگزین تلاش می‌کند. فقط طلای ۱۸ عیار.',
+				),
+				array(
+					'id'      => 'goldmate_fallback_source',
+					'title'   => 'منبع جایگزین',
+					'type'    => 'select',
+					'options' => array(
+						'none'   => 'بدون جایگزین',
+						'brsapi' => 'BrsApi.ir',
+						'atn'    => 'ATN',
+						'tgju'   => 'TGJU',
+						'custom' => 'آدرس دلخواه (JSON)',
+					),
+					'depends' => array( 'goldmate_rate_source' => array( 'custom', 'brsapi', 'atn', 'tgju' ) ),
+					'desc'    => 'باید با منبع اصلی فرق داشته باشد. برای پیش‌فرض‌های BrsApi/ATN/TGJU فیلدهای زیر فقط در حالت «دلخواه» لازم‌اند؛ کلید جداگانه برای جایگزین اختیاری است.',
+				),
+				array(
+					'id'      => 'goldmate_fallback_api_url',
+					'title'   => 'آدرس سرویس جایگزین',
+					'type'    => 'text',
+					'depends' => array( 'goldmate_fallback_source' => array( 'custom' ) ),
+				),
+				array(
+					'id'      => 'goldmate_fallback_api_key',
+					'title'   => 'کلید API جایگزین',
+					'type'    => 'password',
+					'depends' => array( 'goldmate_fallback_source' => array( 'custom', 'brsapi', 'atn' ) ),
+					'desc'    => 'خالی یعنی همان کلید منبع اصلی استفاده شود (اگر پر باشد).',
+				),
+				array(
+					'id'      => 'goldmate_fallback_api_key_header',
+					'title'   => 'نام هدر کلید جایگزین',
+					'type'    => 'text',
+					'depends' => array( 'goldmate_fallback_source' => array( 'custom' ) ),
+				),
+				array(
+					'id'      => 'goldmate_fallback_api_path',
+					'title'   => 'مسیر مقدار جایگزین',
+					'type'    => 'text',
+					'depends' => array( 'goldmate_fallback_source' => array( 'custom' ) ),
+				),
+				array(
+					'id'      => 'goldmate_fallback_api_multiplier',
+					'title'   => 'ضریب تبدیل جایگزین',
+					'type'    => 'number',
+					'step'    => '0.0001',
+					'depends' => array( 'goldmate_fallback_source' => array( 'custom' ) ),
+				),
+				array(
+					'id'      => 'goldmate_fallback_api_time_path',
+					'title'   => 'مسیر زمان جایگزین',
+					'type'    => 'text',
+					'depends' => array( 'goldmate_fallback_source' => array( 'custom' ) ),
+				),
+				array(
+					'id'      => 'goldmate_fallback_api_max_age',
+					'title'   => 'بیشینه‌ی قدمت جایگزین (دقیقه)',
+					'type'    => 'number',
+					'step'    => '1',
+					'depends' => array( 'goldmate_fallback_source' => array( 'custom' ) ),
+				),
+				array(
+					'type'  => 'section',
+					'title' => 'تنظیم روی نرخ دریافتی',
+					'desc'  => 'پس از خواندن نرخ از منبع، می‌توانید درصد یا مبلغ ثابت اضافه/کم کنید و بعد محافظ‌ها اعمال شوند.',
+				),
+				array(
+					'id'      => 'goldmate_rate_adjust_mode',
+					'title'   => 'نوع تنظیم نرخ',
+					'type'    => 'select',
+					'options' => array(
+						'none'  => 'بدون تغییر',
+						'pct'   => 'درصدی (+/−)',
+						'fixed' => 'مبلغ ثابت تومان (+/−)',
+					),
+					'depends' => array( 'goldmate_rate_source' => array( 'custom', 'brsapi', 'atn', 'tgju' ) ),
+				),
+				array(
+					'id'      => 'goldmate_rate_adjust_value',
+					'title'   => 'مقدار تنظیم',
+					'type'    => 'signed_number',
+					'step'    => '0.01',
+					'depends' => array( 'goldmate_rate_adjust_mode' => array( 'pct', 'fixed' ) ),
+					'desc'    => 'مثبت = افزایش، منفی = کاهش. برای درصد مثلاً 1 یعنی یک درصد بالاتر از نرخ منبع.',
+				),
+				array(
+					'type'  => 'section',
 					'title' => 'محافظ‌ها',
 					'desc'  => 'این تنظیمات جلوی خراب شدن قیمت کل فروشگاه بر اثر یک پاسخ نادرست سرویس را می‌گیرند.',
 				),
@@ -280,6 +394,363 @@ class Goldmate_Settings {
 	}
 
 	/**
+	 * Ratesbox-style General tab fields.
+	 *
+	 * @return array[]
+	 */
+	public static function general_fields() {
+
+		$roles = class_exists( 'Goldmate_General' ) ? Goldmate_General::role_options() : array( '' => '—' );
+
+		return array(
+			array(
+				'type'  => 'section',
+				'title' => 'بخش ابتدایی',
+				'desc'  => 'زمان و شرایط محاسبه و ذخیره قیمت محصولات طلا.',
+			),
+			array(
+				'id'      => 'goldmate_calc_mode',
+				'title'   => 'نوع محاسبه قیمت',
+				'type'    => 'select',
+				'options' => array(
+					'store' => 'محاسبه و ذخیره در دیتابیس',
+				),
+			),
+			array(
+				'id'    => 'goldmate_check_price_validity',
+				'title' => 'بررسی زمانبندی شده اعتبار قیمت ها',
+				'type'  => 'checkbox',
+				'label' => 'فعال',
+			),
+			array(
+				'id'    => 'goldmate_reprice_on_cron',
+				'title' => 'محاسبه و ذخیره قیمت در زمان فراخوانی (cron job) ها؟',
+				'type'  => 'checkbox',
+				'label' => 'فعال',
+			),
+			array(
+				'id'    => 'goldmate_reprice_on_manual_fetch',
+				'title' => 'محاسبه و ذخیره قیمت در زمان فراخوانی (قیمت دستی)؟',
+				'type'  => 'checkbox',
+				'label' => 'فعال',
+			),
+			array(
+				'id'    => 'goldmate_reprice_on_item_save',
+				'title' => 'محاسبه و ذخیره قیمت در زمان ذخیره اطلاعات یک آیتم؟',
+				'type'  => 'checkbox',
+				'label' => 'فعال',
+			),
+			array(
+				'id'    => 'goldmate_reprice_on_all_items_save',
+				'title' => 'محاسبه و ذخیره قیمت در زمان ذخیره اطلاعات همه آیتم ها؟',
+				'type'  => 'checkbox',
+				'label' => 'فعال',
+			),
+			array(
+				'id'    => 'goldmate_reprice_on_product_save',
+				'title' => 'محاسبه و ذخیره قیمت در زمان ایجاد یا به‌روزرسانی محصول؟',
+				'type'  => 'checkbox',
+				'label' => 'فعال',
+			),
+			array(
+				'id'    => 'goldmate_reprice_on_add_to_cart',
+				'title' => 'محاسبه و ذخیره قیمت محصول در زمان افزودن به سبد خرید؟',
+				'type'  => 'checkbox',
+				'label' => 'فعال',
+			),
+			array(
+				'id'    => 'goldmate_reprice_cart_on_add',
+				'title' => 'محاسبه و ذخیره قیمت تمام سبد خرید در زمان افزودن محصول؟',
+				'type'  => 'checkbox',
+				'label' => 'فعال',
+			),
+			array(
+				'id'    => 'goldmate_reprice_cart_on_cart',
+				'title' => 'محاسبه و ذخیره قیمت تمام سبد خرید در زمان باز شدن سبد خرید؟',
+				'type'  => 'checkbox',
+				'label' => 'فعال',
+			),
+			array(
+				'id'    => 'goldmate_reprice_cart_on_checkout',
+				'title' => 'محاسبه و ذخیره قیمت تمام سبد خرید در زمان باز شدن صفحه تسویه حساب؟',
+				'type'  => 'checkbox',
+				'label' => 'فعال',
+			),
+			array(
+				'id'    => 'goldmate_store_calc_time',
+				'title' => 'ذخیره زمان محاسبه قیمت محصول؟',
+				'type'  => 'checkbox',
+				'label' => 'فعال',
+			),
+
+			array(
+				'type'  => 'section',
+				'title' => 'بخش سابقه تغییرات قیمت',
+			),
+			array(
+				'id'    => 'goldmate_recalc_only_on_change',
+				'title' => 'محاسبه مجدد تنها در زمان تغییر قیمت آیتم',
+				'type'  => 'checkbox',
+				'label' => 'فعال',
+			),
+			array(
+				'id'    => 'goldmate_price_history_hours',
+				'title' => 'مدت نگهداری سوابق تغییرات قیمت (ساعت)',
+				'type'  => 'number',
+				'step'  => '1',
+			),
+			array(
+				'type'   => 'submit_action',
+				'title'  => 'حذف سوابق',
+				'action' => 'clear_rate_history',
+				'label'  => 'حذف سوابق',
+				'class'  => 'button button-secondary',
+			),
+			array(
+				'type'   => 'submit_action',
+				'title'  => 'به‌روزرسانی سوابق قیمت',
+				'action' => 'prune_rate_history',
+				'label'  => 'به‌روزرسانی سوابق',
+				'class'  => 'button',
+			),
+			array(
+				'id'    => 'goldmate_history_per_page',
+				'title' => 'آیتم در هر صفحه',
+				'type'  => 'number',
+				'step'  => '1',
+			),
+			array(
+				'id'    => 'goldmate_round_prices',
+				'title' => 'روند کردن قیمت',
+				'type'  => 'checkbox',
+				'label' => 'فعال',
+				'desc'  => 'جزئیات گرد کردن (پله و جهت) در تب قیمت‌گذاری است.',
+			),
+			array(
+				'id'    => 'goldmate_strip_below',
+				'title' => 'حذف مقادیر کمتر از',
+				'type'  => 'number',
+				'step'  => '1',
+				'desc'  => 'اگر پله‌ی گرد کردن صفر باشد، از این مقدار به‌عنوان واحد گرد کردن استفاده می‌شود.',
+			),
+			array(
+				'id'    => 'goldmate_details_admin',
+				'title' => 'اطلاعات تکمیلی برای مدیر نمایش داده شود؟',
+				'type'  => 'checkbox',
+				'label' => 'فعال',
+			),
+			array(
+				'id'    => 'goldmate_details_customer',
+				'title' => 'اطلاعات تکمیلی برای مشتری نمایش داده شود؟',
+				'type'  => 'checkbox',
+				'label' => 'فعال',
+			),
+			array(
+				'id'    => 'goldmate_details_email',
+				'title' => 'اطلاعات تکمیلی در ایمیل های ارسالی نمایش داده شود؟',
+				'type'  => 'checkbox',
+				'label' => 'فعال',
+			),
+			array(
+				'id'    => 'goldmate_hide_price_change',
+				'title' => 'اطلاعات افزایش / کاهش قیمت همیشه مخفی باشد؟',
+				'type'  => 'checkbox',
+				'label' => 'فعال',
+			),
+			array(
+				'id'    => 'goldmate_details_colleague',
+				'title' => 'اطلاعات تکمیلی برای همکاران نمایش داده شود؟',
+				'type'  => 'checkbox',
+				'label' => 'فعال',
+			),
+
+			array(
+				'type'  => 'section',
+				'title' => 'اطلاعات مدیر و محدودیت اعتبار',
+			),
+			array(
+				'id'      => 'goldmate_colleague_role',
+				'title'   => 'نقش همکار',
+				'type'    => 'select',
+				'options' => $roles,
+			),
+			array(
+				'id'    => 'goldmate_admin_email',
+				'title' => 'ایمیل مدیر',
+				'type'  => 'text',
+			),
+			array(
+				'id'    => 'goldmate_max_price_validity',
+				'title' => 'حداکثر اعتبار قیمت (دقیقه)',
+				'type'  => 'number',
+				'step'  => '1',
+			),
+			array(
+				'id'    => 'goldmate_oos_shortcodes',
+				'title' => 'قیمت شورتکدها از دسترس خارج شوند؟',
+				'type'  => 'checkbox',
+				'label' => 'فعال',
+			),
+			array(
+				'id'    => 'goldmate_oos_manual_shortcodes',
+				'title' => 'قیمت شورت کدهای دستی از دسترس خارج شوند؟',
+				'type'  => 'checkbox',
+				'label' => 'فعال',
+			),
+			array(
+				'id'    => 'goldmate_oos_shortcode_text',
+				'title' => 'متن جایگزین',
+				'type'  => 'text_rtl',
+			),
+			array(
+				'id'    => 'goldmate_oos_products',
+				'title' => 'قیمت محصولات از دسترس خارج شوند؟',
+				'type'  => 'checkbox',
+				'label' => 'فعال',
+			),
+			array(
+				'id'    => 'goldmate_oos_contact_url',
+				'title' => 'لینک تماس بگیرید',
+				'type'  => 'text',
+			),
+			array(
+				'id'    => 'goldmate_oos_product_text',
+				'title' => 'متن جایگزین',
+				'type'  => 'text_rtl',
+			),
+
+			array(
+				'type'  => 'section',
+				'title' => 'شورتکدها و بروزرسانی',
+			),
+			array(
+				'id'    => 'goldmate_ajax_shortcodes',
+				'title' => 'حالت AJAX برای شورتکدها',
+				'type'  => 'checkbox',
+				'label' => 'فعال',
+			),
+			array(
+				'id'    => 'goldmate_ajax_shortcodes_enable',
+				'title' => 'فعال کردن حالت به‌روز رسانی شورتکدها',
+				'type'  => 'checkbox',
+				'label' => 'فعال',
+			),
+			array(
+				'id'    => 'goldmate_ajax_shortcodes_interval',
+				'title' => 'فاصله زمانی به روز رسانی شورتکدها',
+				'type'  => 'number',
+				'step'  => '1',
+				'desc'  => 'ثانیه',
+			),
+			array(
+				'id'    => 'goldmate_ajax_products',
+				'title' => 'به‌روزرسانی خودکار قیمت محصول',
+				'type'  => 'checkbox',
+				'label' => 'فعال',
+			),
+			array(
+				'id'    => 'goldmate_ajax_products_interval',
+				'title' => 'فاصله زمانی به روز رسانی قیمت محصولات',
+				'type'  => 'number',
+				'step'  => '1',
+				'desc'  => 'ثانیه',
+			),
+			array(
+				'id'      => 'goldmate_jewelry_rate_ref',
+				'title'   => 'مرجع محاسبه قیمت جواهر',
+				'type'    => 'select',
+				'options' => array(
+					'gold_18' => 'طلای ۱۸ عیار (قیمت روز)',
+				),
+			),
+			array(
+				'id'      => 'goldmate_wage_ref',
+				'title'   => 'مرجع محاسبه اجرت ساخت',
+				'type'    => 'select',
+				'options' => array(
+					'default' => 'پیش‌فرض',
+				),
+			),
+			array(
+				'id'      => 'goldmate_tax_method',
+				'title'   => 'روش محاسبه مالیات',
+				'type'    => 'select',
+				'options' => array(
+					'all'       => 'همه عیارها',
+					'selective' => 'انتخابی',
+					'none'      => 'بدون مالیات',
+				),
+			),
+
+			array(
+				'type'  => 'section',
+				'title' => 'مالیات',
+			),
+			array(
+				'id'    => 'goldmate_tax_on_wage',
+				'title' => 'اعمال مالیات روی اجرت ساخت',
+				'type'  => 'checkbox',
+				'label' => 'فعال',
+			),
+			array(
+				'id'    => 'goldmate_tax_on_profit',
+				'title' => 'اعمال مالیات روی سود',
+				'type'  => 'checkbox',
+				'label' => 'فعال',
+			),
+			array(
+				'id'      => 'goldmate_tax_selective_karats',
+				'title'   => 'اعمال مالیات انتخابی روی',
+				'type'    => 'multiselect',
+				'options' => array(
+					'18' => 'طلای ۱۸ عیار',
+					'21' => 'طلای ۲۱ عیار',
+					'22' => 'طلای ۲۲ عیار',
+					'24' => 'طلای ۲۴ عیار',
+				),
+				'desc'    => 'فقط وقتی روش مالیات «انتخابی» است اعمال می‌شود.',
+			),
+
+			array(
+				'type'  => 'section',
+				'title' => 'سفارش‌ها',
+			),
+			array(
+				'id'    => 'goldmate_order_recalc',
+				'title' => 'محاسبه مجدد قیمت اقلام سفارش',
+				'type'  => 'checkbox',
+				'label' => 'فعال',
+			),
+			array(
+				'id'    => 'goldmate_order_item_validity',
+				'title' => 'زمان اعتبار قیمت اقلام سفارش قبل از محاسبه مجدد',
+				'type'  => 'number',
+				'step'  => '0.5',
+				'desc'  => 'ساعت',
+			),
+			array(
+				'id'    => 'goldmate_order_auto_cancel',
+				'title' => 'لغو خودکار سفارش‌ها',
+				'type'  => 'checkbox',
+				'label' => 'فعال',
+			),
+			array(
+				'id'    => 'goldmate_order_auto_cancel_minutes',
+				'title' => 'زمان اعتبار سفارش قبل از لغو خودکار',
+				'type'  => 'number',
+				'step'  => '1',
+				'desc'  => 'دقیقه',
+			),
+			array(
+				'id'    => 'goldmate_hide_shortcode_outofstock',
+				'title' => 'مخفی کردن شورتکد قیمت برای محصولات ناموجود',
+				'type'  => 'checkbox',
+				'label' => 'فعال',
+			),
+		);
+	}
+
+	/**
 	 * Sanitises an endpoint URL without destroying the {KEY} placeholder.
 	 *
 	 * `esc_url_raw()` strips braces, which silently turns `?key={KEY}` into
@@ -322,8 +793,23 @@ class Goldmate_Settings {
 
 			switch ( $field['type'] ) {
 
+				case 'submit_action':
+					break;
+
 				case 'checkbox':
 					update_option( $id, isset( $post[ $id ] ) ? 'yes' : 'no' );
+					break;
+
+				case 'multiselect':
+					$raw = isset( $post[ $id ] ) && is_array( $post[ $id ] ) ? $post[ $id ] : array();
+					$ok  = array();
+					foreach ( $raw as $item ) {
+						$item = sanitize_text_field( wp_unslash( $item ) );
+						if ( isset( $field['options'][ $item ] ) ) {
+							$ok[] = $item;
+						}
+					}
+					update_option( $id, $ok );
 					break;
 
 				case 'number':
@@ -345,6 +831,13 @@ class Goldmate_Settings {
 					update_option( $id, $value );
 					break;
 
+				case 'signed_number':
+					if ( ! isset( $post[ $id ] ) ) {
+						break;
+					}
+					update_option( $id, goldmate_signed_float( wp_unslash( $post[ $id ] ) ) );
+					break;
+
 				case 'select':
 					if ( ! isset( $post[ $id ] ) ) {
 						break;
@@ -358,6 +851,7 @@ class Goldmate_Settings {
 
 				case 'password':
 				case 'text':
+				case 'text_rtl':
 				default:
 					if ( ! isset( $post[ $id ] ) ) {
 						break;
@@ -366,6 +860,15 @@ class Goldmate_Settings {
 					if ( 'goldmate_api_url' === $id && '' !== $value ) {
 						$value = self::sanitize_endpoint_url( $value );
 					}
+					if ( 'goldmate_fallback_api_url' === $id && '' !== $value ) {
+						$value = self::sanitize_endpoint_url( $value );
+					}
+					if ( 'goldmate_admin_email' === $id && '' !== $value ) {
+						$value = sanitize_email( $value );
+					}
+					if ( 'goldmate_oos_contact_url' === $id && '' !== $value ) {
+						$value = esc_url_raw( $value );
+					}
 					update_option( $id, $value );
 					break;
 			}
@@ -373,6 +876,17 @@ class Goldmate_Settings {
 
 		if ( 'fetch' === $tab ) {
 			$warnings = array_merge( $warnings, self::fetch_warnings() );
+		}
+
+		if ( 'general' === $tab ) {
+			// Keep legacy live_interval in sync with product AJAX interval.
+			$prod_on  = 'yes' === goldmate_option( 'goldmate_ajax_products' );
+			$prod_int = (int) goldmate_option( 'goldmate_ajax_products_interval' );
+			update_option( 'goldmate_live_interval', $prod_on ? max( 0, $prod_int ) : 0 );
+			if ( class_exists( 'Goldmate_General' ) ) {
+				Goldmate_General::ensure_validity_cron();
+				Goldmate_General::prune_rate_history();
+			}
 		}
 
 		return $warnings;

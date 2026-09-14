@@ -97,6 +97,13 @@ class Goldmate_Pricing {
 			return false;
 		}
 
+		if ( 'yes' === goldmate_option( 'goldmate_recalc_only_on_change' ) ) {
+			$current = goldmate_positive_float( $product->get_regular_price() );
+			if ( abs( $current - (float) $breakdown['total'] ) < 0.5 ) {
+				return 0;
+			}
+		}
+
 		return self::write_price( $product, $breakdown ) ? 1 : false;
 	}
 
@@ -197,7 +204,9 @@ class Goldmate_Pricing {
 		}
 
 		// Remember what the price was built from, for auditing and invoices.
-		update_post_meta( $id, '_goldmate_priced_at', time() );
+		if ( 'yes' === goldmate_option( 'goldmate_store_calc_time' ) ) {
+			update_post_meta( $id, '_goldmate_priced_at', time() );
+		}
 		update_post_meta( $id, '_goldmate_priced_rate', $breakdown['rate_18'] );
 		update_post_meta( $id, '_goldmate_tax_amount', $breakdown['tax'] );
 
@@ -216,6 +225,12 @@ class Goldmate_Pricing {
 	 * @param int $post_id Product ID.
 	 */
 	public static function on_product_meta_saved( $post_id ) {
+
+		if ( 'yes' !== goldmate_option( 'goldmate_reprice_on_item_save' )
+			&& 'yes' !== goldmate_option( 'goldmate_reprice_on_product_save' ) ) {
+			return;
+		}
+
 		self::apply( $post_id );
 	}
 
@@ -228,6 +243,10 @@ class Goldmate_Pricing {
 	public static function on_product_saved( $product_id, $product = null ) {
 
 		if ( isset( self::$in_progress[ $product_id ] ) ) {
+			return;
+		}
+
+		if ( 'yes' !== goldmate_option( 'goldmate_reprice_on_product_save' ) ) {
 			return;
 		}
 
@@ -249,6 +268,11 @@ class Goldmate_Pricing {
 			return;
 		}
 
+		if ( 'yes' !== goldmate_option( 'goldmate_reprice_on_item_save' )
+			&& 'yes' !== goldmate_option( 'goldmate_reprice_on_product_save' ) ) {
+			return;
+		}
+
 		$breakdown = Goldmate_Calculator::calculate( $variation_id );
 
 		if ( false === $breakdown ) {
@@ -259,6 +283,13 @@ class Goldmate_Pricing {
 
 		if ( ! $product ) {
 			return;
+		}
+
+		if ( 'yes' === goldmate_option( 'goldmate_recalc_only_on_change' ) ) {
+			$current = goldmate_positive_float( $product->get_regular_price() );
+			if ( abs( $current - (float) $breakdown['total'] ) < 0.5 ) {
+				return;
+			}
 		}
 
 		self::write_price( $product, $breakdown );
