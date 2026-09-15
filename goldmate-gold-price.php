@@ -39,6 +39,8 @@ require_once GOLDMATE_PATH . 'includes/class-goldmate-widgets.php';
 require_once GOLDMATE_PATH . 'includes/class-goldmate-shortcodes.php';
 require_once GOLDMATE_PATH . 'includes/class-goldmate-discounts.php';
 require_once GOLDMATE_PATH . 'includes/class-goldmate-components.php';
+require_once GOLDMATE_PATH . 'includes/class-goldmate-calculator-admin.php';
+require_once GOLDMATE_PATH . 'includes/class-goldmate-status.php';
 require_once GOLDMATE_PATH . 'includes/class-goldmate-tools.php';
 require_once GOLDMATE_PATH . 'includes/class-goldmate-general.php';
 require_once GOLDMATE_PATH . 'includes/class-goldmate-settings.php';
@@ -92,6 +94,7 @@ function goldmate_init() {
 	Goldmate_Shortcodes::init();
 	Goldmate_Discounts::init();
 	Goldmate_General::init();
+	Goldmate_Calculator_Admin::init();
 	Goldmate_Admin::init();
 	Goldmate_Variation_Selector::init();
 }

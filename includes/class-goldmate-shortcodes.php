@@ -673,4 +673,209 @@ class Goldmate_Shortcodes {
 
 		return $html;
 	}
+	/**
+	 * Renders the shortcodes reference / titles tab (Ratesbox-style).
+	 */
+	public static function render_admin_tab() {
+
+		$catalog  = Goldmate_Shortcodes::catalog();
+		$defaults = Goldmate_Shortcodes::default_titles();
+		$seen     = array();
+		?>
+		<style>
+			.goldmate-sc-wrap { max-width: 1100px; margin-top: 8px; }
+			.goldmate-sc-table { background: #fff; border: 1px solid #c3c4c7; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 1px rgba(0,0,0,.04); }
+			.goldmate-sc-table table { margin: 0; border: 0; }
+			.goldmate-sc-table th { font-weight: 600; }
+			.goldmate-sc-table code,
+			.goldmate-sc-code {
+				display: inline-block;
+				direction: ltr;
+				text-align: left;
+				background: #f6f7f7;
+				padding: 6px 8px;
+				border-radius: 4px;
+				font-size: 12px;
+				line-height: 1.5;
+				word-break: break-all;
+				max-width: 100%;
+			}
+			.goldmate-sc-table input.regular-text { width: 100%; max-width: 220px; }
+			.goldmate-sc-hint { color: #646970; font-size: 12px; }
+			.goldmate-sc-actions { margin-top: 16px; }
+		</style>
+
+		<div class="goldmate-sc-wrap">
+			<p class="description" style="max-width:900px;">
+				شورتکدها را در برگه، ویجت یا صفحه‌ی محصول قرار دهید. برای اجزای قیمت، شورتکد را داخل صفحه‌ی همان محصول بگذارید (یا با پارامتر <code>id</code> شناسه‌ی محصول را بدهید).
+				با تغییر «عنوان پیش‌فرض» و ذخیره‌ی تغییرات، مقدار <code>title</code> در شورتکد به‌روز می‌شود.
+			</p>
+
+			<details open style="margin:12px 0 20px;padding:12px 16px;background:#fff;border:1px solid #c3c4c7;border-radius:8px;max-width:640px;">
+				<summary style="cursor:pointer;font-weight:600;">سازنده شورتکد تابلو نرخ</summary>
+				<div style="margin-top:12px;display:grid;gap:8px;">
+					<label>آیتم
+						<select id="gm-board-item">
+							<?php foreach ( Goldmate_Rate_Items::choices( false ) as $slug => $label ) : ?>
+								<option value="<?php echo esc_attr( $slug ); ?>"><?php echo esc_html( $label ); ?></option>
+							<?php endforeach; ?>
+						</select>
+					</label>
+					<label><input type="checkbox" class="gm-board-opt" data-k="price" checked> نمایش قیمت</label>
+					<label><input type="checkbox" class="gm-board-opt" data-k="increase" checked> افزایش قیمت</label>
+					<label><input type="checkbox" class="gm-board-opt" data-k="decrease" checked> کاهش قیمت</label>
+					<label><input type="checkbox" class="gm-board-opt" data-k="title" checked> نمایش عنوان</label>
+					<label><input type="checkbox" class="gm-board-opt" data-k="currency" checked> واحد پول</label>
+					<label><input type="checkbox" class="gm-board-opt" data-k="date" checked> تاریخ به‌روزرسانی</label>
+					<label><input type="checkbox" class="gm-board-opt" data-k="live_update" checked> به‌روزرسانی آنی</label>
+					<label><input type="checkbox" class="gm-board-opt" data-k="live_update_colorize" checked> رنگ‌آمیزی تغییر</label>
+					<code id="gm-board-preview" class="goldmate-sc-code" style="display:block;margin-top:8px;"></code>
+				</div>
+				<script>
+				(function(){
+					function build(){
+						var item = document.getElementById('gm-board-item').value;
+						var parts = ['[goldmate_price item="'+item+'"'];
+						document.querySelectorAll('.gm-board-opt').forEach(function(el){
+							parts.push(el.getAttribute('data-k')+'="'+(el.checked?'1':'0')+'"');
+						});
+						parts.push(']');
+						document.getElementById('gm-board-preview').textContent = parts.join(' ');
+					}
+					document.getElementById('gm-board-item').addEventListener('change', build);
+					document.querySelectorAll('.gm-board-opt').forEach(function(el){ el.addEventListener('change', build); });
+					build();
+				})();
+				</script>
+			</details>
+
+			<form method="post" action="<?php echo esc_url( Goldmate_Admin::url( 'shortcodes' ) ); ?>" id="goldmate-shortcodes-form">
+				<?php wp_nonce_field( 'goldmate_admin' ); ?>
+				<input type="hidden" name="goldmate_action" value="save">
+
+				<div class="goldmate-sc-table">
+					<table class="widefat striped">
+						<thead>
+							<tr>
+								<th style="width:22%;">عنوان پیش‌فرض</th>
+								<th style="width:40%;">شورتکد</th>
+								<th>کاربرد</th>
+							</tr>
+						</thead>
+						<tbody>
+							<?php foreach ( $catalog as $row ) : ?>
+								<?php
+								$title_key = $row['title_key'];
+								$same_as   = ! empty( $row['same_as'] );
+								$show_input = $title_key && ! $same_as && empty( $seen[ $title_key ] );
+								if ( $title_key && ! $same_as ) {
+									$seen[ $title_key ] = true;
+								}
+								?>
+								<tr data-goldmate-sc-row="<?php echo esc_attr( $row['id'] ); ?>"
+									data-title-key="<?php echo esc_attr( $title_key ); ?>"
+									data-same-as="<?php echo esc_attr( $same_as ? $row['same_as'] : '' ); ?>"
+									data-template="<?php echo esc_attr( $row['shortcode'] ); ?>">
+									<td>
+										<?php if ( $show_input ) : ?>
+											<input
+												type="text"
+												class="regular-text goldmate-sc-title"
+												name="goldmate_sc_title_<?php echo esc_attr( $title_key ); ?>"
+												data-title-key="<?php echo esc_attr( $title_key ); ?>"
+												value="<?php echo esc_attr( Goldmate_Shortcodes::title( $title_key ) ); ?>"
+												placeholder="<?php echo esc_attr( isset( $defaults[ $title_key ] ) ? $defaults[ $title_key ] : '' ); ?>"
+											>
+										<?php elseif ( $same_as ) : ?>
+											<span class="goldmate-sc-hint">مشابه بالا</span>
+										<?php else : ?>
+											<span class="goldmate-sc-hint">—</span>
+										<?php endif; ?>
+									</td>
+									<td>
+										<code class="goldmate-sc-code" data-sc-preview><?php echo esc_html( $row['shortcode'] ); ?></code>
+									</td>
+									<td><?php echo esc_html( $row['usage'] ); ?></td>
+								</tr>
+							<?php endforeach; ?>
+						</tbody>
+					</table>
+				</div>
+
+				<p class="goldmate-sc-actions">
+					<button type="submit" class="button button-primary button-hero">ذخیره تغییرات</button>
+				</p>
+			</form>
+		</div>
+
+		<script>
+		( function () {
+			var form = document.getElementById( 'goldmate-shortcodes-form' );
+			if ( ! form ) { return; }
+
+			function titles() {
+				var map = {};
+				form.querySelectorAll( '.goldmate-sc-title' ).forEach( function ( input ) {
+					map[ input.getAttribute( 'data-title-key' ) ] = input.value;
+				} );
+				return map;
+			}
+
+			function escapeAttr( value ) {
+				return String( value || '' ).replace( /'/g, "\\'" );
+			}
+
+			function rebuild( template, map ) {
+				var out = template;
+				Object.keys( map ).forEach( function ( key ) {
+					var reTitle = new RegExp( "title='[^']*'", 'g' );
+					var reEqual = new RegExp( "equal_to_label='[^']*'", 'g' );
+					if ( key === 'equal_to' ) {
+						out = out.replace( reEqual, "equal_to_label='" + escapeAttr( map[ key ] ) + "'" );
+						if ( out.indexOf( "equal_to_label=" ) === -1 && template.indexOf( 'equal_to_label' ) !== -1 ) {
+							// keep as-is
+						}
+					} else {
+						// Only replace title= in rows that belong to this key — handled per-row below.
+					}
+				} );
+				return out;
+			}
+
+			function refresh() {
+				var map = titles();
+				form.querySelectorAll( '[data-goldmate-sc-row]' ).forEach( function ( row ) {
+					var key = row.getAttribute( 'data-title-key' );
+					var same = row.getAttribute( 'data-same-as' );
+					var template = row.getAttribute( 'data-template' ) || '';
+					var preview = row.querySelector( '[data-sc-preview]' );
+					if ( ! preview ) { return; }
+
+					var titleKey = same || key;
+					var titleVal = titleKey && map[ titleKey ] !== undefined ? map[ titleKey ] : '';
+					var equalVal = map.equal_to !== undefined ? map.equal_to : '';
+
+					var next = template;
+					if ( titleKey && next.indexOf( "title='" ) !== -1 ) {
+						next = next.replace( /title='[^']*'/, "title='" + escapeAttr( titleVal ) + "'" );
+					}
+					if ( next.indexOf( "equal_to_label='" ) !== -1 ) {
+						next = next.replace( /equal_to_label='[^']*'/, "equal_to_label='" + escapeAttr( equalVal ) + "'" );
+					}
+					if ( row.getAttribute( 'data-goldmate-sc-row' ) === 'equal_label' ) {
+						next = "equal_to_label='" + escapeAttr( equalVal ) + "'";
+					}
+					preview.textContent = next;
+				} );
+			}
+
+			form.addEventListener( 'input', function ( e ) {
+				if ( e.target && e.target.classList.contains( 'goldmate-sc-title' ) ) {
+					refresh();
+				}
+			} );
+		} )();
+		</script>
+		<?php
+	}
 }

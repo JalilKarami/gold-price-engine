@@ -245,4 +245,160 @@ class Goldmate_Components {
 			'profit_base' => $profit_base,
 		);
 	}
+	/**
+	 * Renders the custom price-components admin tab.
+	 */
+	public static function render_admin_tab() {
+
+		$items = Goldmate_Components::all();
+		$modes = Goldmate_Components::calc_modes();
+		?>
+		<style>
+			.goldmate-comp-wrap { max-width: 1100px; margin-top: 8px; }
+			.goldmate-comp-table { background:#fff; border:1px solid #c3c4c7; border-radius:8px; overflow:hidden; }
+			.goldmate-comp-table table { margin:0; border:0; }
+			.goldmate-comp-table th { font-weight:600; }
+			.goldmate-comp-table input[type="text"],
+			.goldmate-comp-table input[type="number"],
+			.goldmate-comp-table select { width:100%; max-width:100%; }
+			.goldmate-comp-actions { margin-top:16px; display:flex; gap:10px; align-items:center; }
+		</style>
+
+		<div class="goldmate-comp-wrap">
+			<p class="description" style="max-width:900px;">
+				اجزای سفارشی به فرمول قیمت طلا اضافه می‌شوند (مثل هزینه بسته‌بندی، حکاکی، یا هر قلم دلخواه).
+				پس از ذخیره، فیلد هر جزء در تب «نرخ خودکار» محصول ظاهر می‌شود.
+			</p>
+
+			<form method="post" action="<?php echo esc_url( Goldmate_Admin::url( 'components' ) ); ?>" id="goldmate-components-form">
+				<?php wp_nonce_field( 'goldmate_admin' ); ?>
+				<input type="hidden" name="goldmate_action" value="save">
+
+				<div class="goldmate-comp-table">
+					<table class="widefat striped" id="goldmate-comp-table">
+						<thead>
+							<tr>
+								<th style="width:8%;">فعال</th>
+								<th style="width:22%;">عنوان</th>
+								<th style="width:22%;">نوع محاسبه</th>
+								<th style="width:14%;">مقدار پیش‌فرض</th>
+								<th style="width:12%;">مشمول مالیات</th>
+								<th style="width:12%;">داخل سود</th>
+								<th style="width:10%;"></th>
+							</tr>
+						</thead>
+						<tbody>
+							<?php if ( empty( $items ) ) : ?>
+								<tr class="goldmate-comp-row">
+									<td><input type="checkbox" name="goldmate_comp_enabled[0]" value="1" checked></td>
+									<td>
+										<input type="hidden" name="goldmate_comp_id[0]" value="">
+										<input type="text" name="goldmate_comp_label[0]" placeholder="مثلاً بسته‌بندی">
+									</td>
+									<td>
+										<select name="goldmate_comp_calc[0]">
+											<?php foreach ( $modes as $key => $label ) : ?>
+												<option value="<?php echo esc_attr( $key ); ?>"><?php echo esc_html( $label ); ?></option>
+											<?php endforeach; ?>
+										</select>
+									</td>
+									<td><input type="number" name="goldmate_comp_default[0]" min="0" step="0.01" value="0"></td>
+									<td><input type="checkbox" name="goldmate_comp_taxable[0]" value="1"></td>
+									<td><input type="checkbox" name="goldmate_comp_in_profit[0]" value="1"></td>
+									<td><button type="button" class="button link-delete goldmate-comp-remove">حذف</button></td>
+								</tr>
+							<?php else : ?>
+								<?php foreach ( $items as $i => $item ) : ?>
+									<tr class="goldmate-comp-row">
+										<td><input type="checkbox" name="goldmate_comp_enabled[<?php echo (int) $i; ?>]" value="1" <?php checked( $item['enabled'], 'yes' ); ?>></td>
+										<td>
+											<input type="hidden" name="goldmate_comp_id[<?php echo (int) $i; ?>]" value="<?php echo esc_attr( $item['id'] ); ?>">
+											<input type="text" name="goldmate_comp_label[<?php echo (int) $i; ?>]" value="<?php echo esc_attr( $item['label'] ); ?>">
+										</td>
+										<td>
+											<select name="goldmate_comp_calc[<?php echo (int) $i; ?>]">
+												<?php foreach ( $modes as $key => $label ) : ?>
+													<option value="<?php echo esc_attr( $key ); ?>" <?php selected( $item['calc'], $key ); ?>><?php echo esc_html( $label ); ?></option>
+												<?php endforeach; ?>
+											</select>
+										</td>
+										<td><input type="number" name="goldmate_comp_default[<?php echo (int) $i; ?>]" min="0" step="0.01" value="<?php echo esc_attr( $item['default'] ); ?>"></td>
+										<td><input type="checkbox" name="goldmate_comp_taxable[<?php echo (int) $i; ?>]" value="1" <?php checked( $item['taxable'], 'yes' ); ?>></td>
+										<td><input type="checkbox" name="goldmate_comp_in_profit[<?php echo (int) $i; ?>]" value="1" <?php checked( $item['in_profit'], 'yes' ); ?>></td>
+										<td><button type="button" class="button link-delete goldmate-comp-remove">حذف</button></td>
+									</tr>
+								<?php endforeach; ?>
+							<?php endif; ?>
+						</tbody>
+					</table>
+				</div>
+
+				<p class="goldmate-comp-actions">
+					<button type="button" class="button" id="goldmate-comp-add">+ افزودن جزء</button>
+					<button type="submit" class="button button-primary">ذخیره تغییرات</button>
+				</p>
+			</form>
+		</div>
+
+		<script type="text/template" id="goldmate-comp-row-tpl">
+			<tr class="goldmate-comp-row">
+				<td><input type="checkbox" name="goldmate_comp_enabled[__i__]" value="1" checked></td>
+				<td>
+					<input type="hidden" name="goldmate_comp_id[__i__]" value="">
+					<input type="text" name="goldmate_comp_label[__i__]" placeholder="عنوان جزء">
+				</td>
+				<td>
+					<select name="goldmate_comp_calc[__i__]">
+						<?php foreach ( $modes as $key => $label ) : ?>
+							<option value="<?php echo esc_attr( $key ); ?>"><?php echo esc_html( $label ); ?></option>
+						<?php endforeach; ?>
+					</select>
+				</td>
+				<td><input type="number" name="goldmate_comp_default[__i__]" min="0" step="0.01" value="0"></td>
+				<td><input type="checkbox" name="goldmate_comp_taxable[__i__]" value="1"></td>
+				<td><input type="checkbox" name="goldmate_comp_in_profit[__i__]" value="1"></td>
+				<td><button type="button" class="button link-delete goldmate-comp-remove">حذف</button></td>
+			</tr>
+		</script>
+		<script>
+		( function () {
+			var table = document.getElementById( 'goldmate-comp-table' );
+			var addBtn = document.getElementById( 'goldmate-comp-add' );
+			var tpl = document.getElementById( 'goldmate-comp-row-tpl' );
+			if ( ! table || ! addBtn || ! tpl ) { return; }
+
+			function reindex() {
+				table.querySelectorAll( 'tbody tr' ).forEach( function ( row, i ) {
+					row.querySelectorAll( 'input, select' ).forEach( function ( input ) {
+						if ( ! input.name ) { return; }
+						input.name = input.name.replace( /\[\d+\]/, '[' + i + ']' );
+					} );
+				} );
+			}
+
+			addBtn.addEventListener( 'click', function () {
+				var i = table.querySelectorAll( 'tbody tr' ).length;
+				var html = tpl.innerHTML.replace( /__i__/g, String( i ) );
+				table.querySelector( 'tbody' ).insertAdjacentHTML( 'beforeend', html );
+				reindex();
+			} );
+
+			table.addEventListener( 'click', function ( e ) {
+				if ( e.target && e.target.classList.contains( 'goldmate-comp-remove' ) ) {
+					var rows = table.querySelectorAll( 'tbody tr' );
+					if ( rows.length <= 1 ) {
+						var row = rows[0];
+						row.querySelectorAll( 'input[type="text"]' ).forEach( function ( input ) { input.value = ''; } );
+						row.querySelectorAll( 'input[type="hidden"]' ).forEach( function ( input ) { input.value = ''; } );
+						row.querySelectorAll( 'input[type="number"]' ).forEach( function ( input ) { input.value = '0'; } );
+						return;
+					}
+					e.target.closest( 'tr' ).remove();
+					reindex();
+				}
+			} );
+		} )();
+		</script>
+		<?php
+	}
 }
