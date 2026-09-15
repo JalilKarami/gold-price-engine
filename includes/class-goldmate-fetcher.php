@@ -12,6 +12,71 @@ class Goldmate_Fetcher {
 	const ITEM_CRON = 'goldmate_fetch_rate_items';
 
 	/**
+	 * Endpoint presets offered in the admin (source type dropdowns).
+	 *
+	 * @return array
+	 */
+	public static function presets() {
+		return array(
+			'manual' => array(
+				'label' => 'دستی (بدون دریافت خودکار)',
+			),
+			'custom' => array(
+				'label'      => 'آدرس دلخواه (JSON)',
+				'url'        => '',
+				'path'       => '',
+				'multiplier' => 1,
+				'key_header' => '',
+			),
+			'brsapi' => array(
+				'label'      => 'BrsApi.ir',
+				'url'        => 'https://Api.BrsApi.ir/Market/Gold_Currency.php?key={KEY}',
+				'path'       => 'gold[symbol=IR_GOLD_18K].price',
+				'multiplier' => 1,
+				'key_header' => '',
+				'time_path'  => 'gold[symbol=IR_GOLD_18K].time_unix',
+				'max_age'    => 1440,
+				'note'       => 'کلید در آدرس جایگزین {KEY} می‌شود. پاسخ به تومان است؛ ضریب ۱.',
+			),
+			'atn'    => array(
+				'label'      => 'ATN (وب‌سرویس اختصاصی)',
+				'url'        => 'http://77.104.95.33/api/v1/prices/atn',
+				'path'       => 'atn.products[code=melted_gold_tomorrow].gram_sell',
+				'multiplier' => 1,
+				'key_header' => 'X-API-Key',
+				'time_path'  => 'atn.updated_at',
+				'max_age'    => 1440,
+				'note'       => 'کلید در هدر X-API-Key. مقدار gram_sell قیمت گرم ۱۸ عیار به تومان است.',
+			),
+			'tgju'   => array(
+				'label'      => 'TGJU',
+				'url'        => 'https://call1.tgju.org/ajax.json',
+				'path'       => 'current.geram18.p',
+				'multiplier' => 0.1,
+				'key_header' => '',
+				'note'       => 'پاسخ به ریال است؛ ضریب ۰٫۱ آن را به تومان تبدیل می‌کند.',
+			),
+		);
+	}
+
+	/**
+	 * Human-readable label for a provider/source key.
+	 *
+	 * @param string $provider Raw key, e.g. `atn`.
+	 * @return string
+	 */
+	public static function provider_label( $provider ) {
+
+		if ( '' === (string) $provider ) {
+			return '';
+		}
+
+		$presets = self::presets();
+
+		return isset( $presets[ $provider ] ) ? $presets[ $provider ]['label'] : (string) $provider;
+	}
+
+	/**
 	 * Boots the multi-item cron walker.
 	 */
 	public static function init() {
@@ -217,7 +282,7 @@ class Goldmate_Fetcher {
 		$type = sanitize_key( $type );
 		$cfg  = is_array( $cfg ) ? $cfg : array();
 
-		$presets = class_exists( 'Goldmate_Rates' ) ? Goldmate_Rates::presets() : array();
+		$presets = self::presets();
 
 		if ( isset( $presets[ $type ] ) && ! empty( $presets[ $type ]['url'] ) ) {
 			$p = $presets[ $type ];

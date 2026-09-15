@@ -9,7 +9,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class Goldmate_Install {
 
-	const DB_VERSION = '3.0.0';
+	const DB_VERSION = '3.2.0';
 	const DB_OPTION  = 'goldmate_db_version';
 
 	/**
@@ -20,6 +20,8 @@ class Goldmate_Install {
 		self::maybe_migrate_v3();
 		self::maybe_migrate_legacy_api_to_gold18();
 		self::maybe_seed_provider_gold18_items();
+		self::maybe_seed_formulas();
+		self::maybe_migrate_rate_item_meta_to_formulas();
 		update_option( self::DB_OPTION, self::DB_VERSION, false );
 	}
 
@@ -34,6 +36,8 @@ class Goldmate_Install {
 			Goldmate_Rate_Items::seed_defaults();
 			self::maybe_migrate_legacy_api_to_gold18();
 			self::maybe_seed_provider_gold18_items();
+			self::maybe_seed_formulas();
+			self::maybe_migrate_rate_item_meta_to_formulas();
 		}
 	}
 
@@ -42,11 +46,13 @@ class Goldmate_Install {
 	 */
 	public static function tables_exist() {
 		global $wpdb;
-		$items = self::items_table();
-		$hist  = self::history_table();
-		$a     = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $items ) );
-		$b     = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $hist ) );
-		return ( $a === $items && $b === $hist );
+		$items    = self::items_table();
+		$hist     = self::history_table();
+		$formulas = self::formulas_table();
+		$a        = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $items ) );
+		$b        = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $hist ) );
+		$c        = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $formulas ) );
+		return ( $a === $items && $b === $hist && $c === $formulas );
 	}
 
 	/**
@@ -66,6 +72,14 @@ class Goldmate_Install {
 	}
 
 	/**
+	 * @return string
+	 */
+	public static function formulas_table() {
+		global $wpdb;
+		return $wpdb->prefix . 'goldmate_formulas';
+	}
+
+	/**
 	 * dbDelta for rate items + history.
 	 */
 	protected static function create_tables() {
@@ -73,9 +87,10 @@ class Goldmate_Install {
 
 		require_once ABSPATH . 'wp-admin/includes/upgrade.php';
 
-		$charset = $wpdb->get_charset_collate();
-		$items   = self::items_table();
-		$hist    = self::history_table();
+		$charset  = $wpdb->get_charset_collate();
+		$items    = self::items_table();
+		$hist     = self::history_table();
+		$formulas = self::formulas_table();
 
 		$sql_items = "CREATE TABLE {$items} (
 			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
@@ -123,8 +138,27 @@ class Goldmate_Install {
 			KEY item_at (item_id, recorded_at)
 		) {$charset};";
 
+		$sql_formulas = "CREATE TABLE {$formulas} (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			slug varchar(64) NOT NULL,
+			label varchar(191) NOT NULL DEFAULT '',
+			formula_type varchar(32) NOT NULL DEFAULT 'weight',
+			rate_slug varchar(64) NOT NULL DEFAULT '',
+			is_default tinyint(1) NOT NULL DEFAULT 0,
+			status varchar(16) NOT NULL DEFAULT 'active',
+			priority int(11) NOT NULL DEFAULT 10,
+			params longtext NULL,
+			created_at bigint(20) unsigned NOT NULL DEFAULT 0,
+			updated_at bigint(20) unsigned NOT NULL DEFAULT 0,
+			PRIMARY KEY  (id),
+			UNIQUE KEY slug (slug),
+			KEY status (status),
+			KEY priority (priority)
+		) {$charset};";
+
 		dbDelta( $sql_items );
 		dbDelta( $sql_hist );
+		dbDelta( $sql_formulas );
 	}
 
 	/**
@@ -370,6 +404,62 @@ class Goldmate_Install {
 					'formula_type'         => 'weight',
 				)
 			);
+		}
+
+		update_option( $flag, 1, false );
+	}
+
+	/**
+	 * Seeds the named formula layer with a default formula.
+	 */
+	public static function maybe_seed_formulas() {
+		if ( ! class_exists( 'Goldmate_Formulas' ) ) {
+			return;
+		}
+
+		Goldmate_Formulas::seed_defaults();
+	}
+
+	/**
+	 * Converts legacy `_goldmate_rate_item` product meta into `_goldmate_formula`.
+	 */
+	public static function maybe_migrate_rate_item_meta_to_formulas() {
+		$flag = 'goldmate_migrated_rate_item_to_formula_v32';
+		if ( get_option( $flag ) ) {
+			return;
+		}
+		if ( ! class_exists( 'Goldmate_Formulas' ) ) {
+			return;
+		}
+
+		global $wpdb;
+
+		$rows = $wpdb->get_results(
+			"SELECT post_id, meta_value FROM {$wpdb->postmeta}
+			WHERE meta_key = '_goldmate_rate_item' AND meta_value <> ''",
+			ARRAY_A
+		);
+
+		if ( is_array( $rows ) ) {
+			foreach ( $rows as $row ) {
+				$product_id = (int) $row['post_id'];
+				$rate_slug  = sanitize_title( (string) $row['meta_value'] );
+				if ( $product_id <= 0 || '' === $rate_slug ) {
+					continue;
+				}
+
+				$existing = (string) get_post_meta( $product_id, '_goldmate_formula', true );
+				if ( '' !== $existing ) {
+					delete_post_meta( $product_id, '_goldmate_rate_item' );
+					continue;
+				}
+
+				$formula = Goldmate_Formulas::ensure_for_rate_slug( $rate_slug );
+				if ( $formula ) {
+					update_post_meta( $product_id, '_goldmate_formula', $formula['slug'] );
+				}
+				delete_post_meta( $product_id, '_goldmate_rate_item' );
+			}
 		}
 
 		update_option( $flag, 1, false );

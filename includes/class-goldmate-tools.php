@@ -1,6 +1,6 @@
 <?php
 /**
- * Bulk tools: wage / rate-item / karat by category.
+ * Bulk tools: wage / formula / karat by category.
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -13,18 +13,18 @@ class Goldmate_Tools {
 	 * Admin tools tab UI.
 	 */
 	public static function render_admin_tab() {
-		$cats  = get_terms(
+		$cats      = get_terms(
 			array(
 				'taxonomy'   => 'product_cat',
 				'hide_empty' => false,
 			)
 		);
-		$items = class_exists( 'Goldmate_Rate_Items' ) ? Goldmate_Rate_Items::choices( false ) : array();
+		$formulas = class_exists( 'Goldmate_Formulas' ) ? Goldmate_Formulas::choices( true ) : array();
 		?>
 		<form method="post" action="<?php echo esc_url( Goldmate_Admin::url( 'tools' ) ); ?>">
 			<?php wp_nonce_field( 'goldmate_admin' ); ?>
 
-			<h2>تغییر گروهی نوع آیتم نرخ</h2>
+			<h2>تغییر گروهی فرمول قیمت</h2>
 			<table class="form-table">
 				<tr>
 					<th>دسته‌بندی</th>
@@ -39,17 +39,17 @@ class Goldmate_Tools {
 					</td>
 				</tr>
 				<tr>
-					<th>آیتم نرخ</th>
+					<th>فرمول</th>
 					<td>
-						<select name="goldmate_tool_rate_item">
-							<?php foreach ( $items as $slug => $label ) : ?>
+						<select name="goldmate_tool_formula">
+							<?php foreach ( $formulas as $slug => $label ) : ?>
 								<option value="<?php echo esc_attr( $slug ); ?>"><?php echo esc_html( $label ); ?></option>
 							<?php endforeach; ?>
 						</select>
 					</td>
 				</tr>
 			</table>
-			<button type="submit" class="button button-primary" name="goldmate_action" value="tool_set_rate_item">اعمال آیتم نرخ</button>
+			<button type="submit" class="button button-primary" name="goldmate_action" value="tool_set_formula">اعمال فرمول</button>
 
 			<hr>
 
@@ -132,18 +132,40 @@ class Goldmate_Tools {
 	 * @param array $post POST.
 	 * @return int Count.
 	 */
-	public static function set_rate_item( $post ) {
+	public static function set_formula( $post ) {
 		$cats = isset( $post['goldmate_tool_cats'] ) ? array_map( 'intval', (array) $post['goldmate_tool_cats'] ) : array();
-		$slug = isset( $post['goldmate_tool_rate_item'] ) ? sanitize_title( wp_unslash( $post['goldmate_tool_rate_item'] ) ) : '';
-		if ( ! $cats || ! $slug ) {
+		$slug = isset( $post['goldmate_tool_formula'] ) ? sanitize_title( wp_unslash( $post['goldmate_tool_formula'] ) ) : '';
+		if ( ! $cats || ! $slug || ! class_exists( 'Goldmate_Formulas' ) ) {
+			return 0;
+		}
+		if ( ! Goldmate_Formulas::get_by_slug( $slug ) ) {
 			return 0;
 		}
 		return self::map_products(
 			$cats,
 			function ( $product_id ) use ( $slug ) {
-				update_post_meta( $product_id, '_goldmate_rate_item', $slug );
+				update_post_meta( $product_id, '_goldmate_formula', $slug );
+				delete_post_meta( $product_id, '_goldmate_rate_item' );
 			}
 		);
+	}
+
+	/**
+	 * @deprecated 3.2.0 Use set_formula().
+	 * @param array $post POST.
+	 * @return int Count.
+	 */
+	public static function set_rate_item( $post ) {
+		if ( isset( $post['goldmate_tool_rate_item'] ) && ! isset( $post['goldmate_tool_formula'] ) ) {
+			$rate_slug = sanitize_title( wp_unslash( $post['goldmate_tool_rate_item'] ) );
+			$formula   = class_exists( 'Goldmate_Formulas' )
+				? Goldmate_Formulas::ensure_for_rate_slug( $rate_slug )
+				: null;
+			if ( $formula ) {
+				$post['goldmate_tool_formula'] = $formula['slug'];
+			}
+		}
+		return self::set_formula( $post );
 	}
 
 	/**

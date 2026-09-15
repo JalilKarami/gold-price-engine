@@ -71,10 +71,11 @@ class Goldmate_General {
 		$max = (int) goldmate_option( 'goldmate_max_price_validity' );
 
 		if ( $max <= 0 ) {
-			return Goldmate_Rates::is_stale();
+			return Goldmate_Rate_Items::is_reference_stale();
 		}
 
-		$updated = (int) get_option( 'goldmate_rate_updated_at', 0 );
+		$item = class_exists( 'Goldmate_Rate_Items' ) ? Goldmate_Rate_Items::reference_item() : null;
+		$updated = $item ? (int) $item['updated_at'] : (int) get_option( 'goldmate_rate_updated_at', 0 );
 
 		if ( $updated <= 0 ) {
 			return true;
@@ -440,7 +441,7 @@ class Goldmate_General {
 		if ( class_exists( 'Goldmate_Rate_Items' ) ) {
 			Goldmate_Rate_Items::clear_history( 0 );
 		}
-		delete_option( Goldmate_Rates::HISTORY_KEY );
+		delete_option( 'goldmate_rate_history' );
 	}
 
 	/**
@@ -449,27 +450,11 @@ class Goldmate_General {
 	public static function prune_rate_history() {
 
 		$hours = (float) goldmate_option( 'goldmate_price_history_hours' );
-		$list  = Goldmate_Rates::history();
-
-		if ( $hours <= 0 || empty( $list ) ) {
+		if ( $hours <= 0 || ! class_exists( 'Goldmate_Rate_Items' ) ) {
 			return;
 		}
 
-		$cutoff = time() - (int) ( $hours * HOUR_IN_SECONDS );
-		$kept   = array();
-
-		foreach ( $list as $row ) {
-			if ( ! empty( $row['at'] ) && (int) $row['at'] >= $cutoff ) {
-				$kept[] = $row;
-			}
-		}
-
-		$per_page = (int) goldmate_option( 'goldmate_history_per_page' );
-		if ( $per_page > 0 ) {
-			$kept = array_slice( $kept, 0, max( $per_page, 30 ) );
-		}
-
-		update_option( Goldmate_Rates::HISTORY_KEY, $kept, false );
+		Goldmate_Rate_Items::prune_history_older_than( $hours );
 	}
 
 	/**

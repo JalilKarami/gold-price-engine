@@ -17,6 +17,33 @@ class Goldmate_Live {
 		add_action( 'wp_ajax_goldmate_live_rate', array( __CLASS__, 'ajax_live_rate' ) );
 		add_action( 'wp_ajax_nopriv_goldmate_live_rate', array( __CLASS__, 'ajax_live_rate' ) );
 		add_action( 'wp_enqueue_scripts', array( __CLASS__, 'enqueue' ) );
+		add_filter( 'woocommerce_post_class', array( __CLASS__, 'product_post_class' ), 10, 2 );
+	}
+
+	/**
+	 * Marks GoldMate-priced products so live.js can refresh loop cards.
+	 *
+	 * @param string[]   $classes Classes.
+	 * @param WC_Product $product Product.
+	 * @return string[]
+	 */
+	public static function product_post_class( $classes, $product ) {
+
+		if ( ! $product || ! is_a( $product, 'WC_Product' ) ) {
+			return $classes;
+		}
+
+		$enabled = $product->get_meta( '_goldmate_enabled', true );
+		if ( 'yes' !== $enabled && $product->get_parent_id() ) {
+			$parent = wc_get_product( $product->get_parent_id() );
+			$enabled = $parent ? $parent->get_meta( '_goldmate_enabled', true ) : $enabled;
+		}
+
+		if ( 'yes' === $enabled ) {
+			$classes[] = 'goldmate-priced';
+		}
+
+		return $classes;
 	}
 
 	/**
@@ -62,11 +89,15 @@ class Goldmate_Live {
 			true
 		);
 
-		$product_id = 0;
-		if ( is_product() ) {
-			global $product;
+		$product_id  = 0;
+		$is_variable = false;
+		if ( function_exists( 'is_product' ) && is_product() ) {
+			$product_id = (int) get_queried_object_id();
+			$product    = $product_id ? wc_get_product( $product_id ) : null;
 			if ( $product && is_a( $product, 'WC_Product' ) ) {
-				$product_id = (int) $product->get_id();
+				$is_variable = $product->is_type( 'variable' );
+			} else {
+				$product_id = 0;
 			}
 		}
 
@@ -84,10 +115,11 @@ class Goldmate_Live {
 			'goldmate-live',
 			'goldmateLive',
 			array(
-				'ajaxUrl'   => admin_url( 'admin-ajax.php' ),
-				'interval'  => max( 15, $interval ) * 1000,
-				'productId' => $product_id,
-				'items'     => $items,
+				'ajaxUrl'    => admin_url( 'admin-ajax.php' ),
+				'interval'   => max( 15, $interval ) * 1000,
+				'productId'  => $product_id,
+				'isVariable' => $is_variable,
+				'items'      => $items,
 			)
 		);
 	}
@@ -122,14 +154,27 @@ class Goldmate_Live {
 	}
 
 	/**
-	 * AJAX: current rate, change %, optional live product total.
+	 * AJAX: current rate, change %, optional live product total(s).
 	 */
 	public static function ajax_live_rate() {
 
-		$product_id = isset( $_GET['product_id'] ) ? absint( $_GET['product_id'] ) : 0; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
-		$item_slug  = isset( $_GET['item'] ) ? sanitize_title( wp_unslash( $_GET['item'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		$product_id    = isset( $_GET['product_id'] ) ? absint( $_GET['product_id'] ) : 0; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		$variation_id  = isset( $_GET['variation_id'] ) ? absint( $_GET['variation_id'] ) : 0; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		$item_slug     = isset( $_GET['item'] ) ? sanitize_title( wp_unslash( $_GET['item'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		$product_ids   = array();
 
-		if ( $item_slug && class_exists( 'Goldmate_Rate_Items' ) && ! $product_id ) {
+		if ( ! empty( $_GET['product_ids'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+			$raw = sanitize_text_field( wp_unslash( $_GET['product_ids'] ) ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+			foreach ( explode( ',', $raw ) as $id ) {
+				$id = absint( $id );
+				if ( $id > 0 ) {
+					$product_ids[] = $id;
+				}
+			}
+			$product_ids = array_values( array_unique( array_slice( $product_ids, 0, 24 ) ) );
+		}
+
+		if ( $item_slug && class_exists( 'Goldmate_Rate_Items' ) && ! $product_id && empty( $product_ids ) ) {
 			$item = Goldmate_Rate_Items::get_by_slug( $item_slug );
 			if ( $item ) {
 				wp_send_json_success(
@@ -147,7 +192,42 @@ class Goldmate_Live {
 			}
 		}
 
-		wp_send_json_success( self::payload( $product_id ) );
+		$calc_id = $variation_id > 0 ? $variation_id : $product_id;
+		$data    = self::payload( $calc_id );
+
+		if ( $variation_id > 0 ) {
+			$data['variation_id'] = $variation_id;
+			$data['product_id']   = $product_id > 0 ? $product_id : (int) wp_get_post_parent_id( $variation_id );
+		}
+
+		if ( $product_ids ) {
+			$data['products'] = self::payloads_for_products( $product_ids );
+		}
+
+		wp_send_json_success( $data );
+	}
+
+	/**
+	 * Live totals for a list of product IDs (shop/archive cards).
+	 *
+	 * @param int[] $product_ids IDs.
+	 * @return array<int,array{live_total:float,live_total_html:string}>
+	 */
+	protected static function payloads_for_products( $product_ids ) {
+
+		$out = array();
+		foreach ( $product_ids as $id ) {
+			$id = (int) $id;
+			$b  = Goldmate_Calculator::calculate( $id );
+			if ( false === $b ) {
+				continue;
+			}
+			$out[ $id ] = array(
+				'live_total'      => $b['total'],
+				'live_total_html' => wc_price( $b['total'] ),
+			);
+		}
+		return $out;
 	}
 
 	/**
@@ -189,11 +269,11 @@ class Goldmate_Live {
 			'updated_at'        => $updated,
 			'updated_human'     => goldmate_format_time( $updated ),
 			'batch_running'     => $running,
-			'stale'             => ! $running && ( Goldmate_Rates::is_stale() || ( class_exists( 'Goldmate_General' ) && Goldmate_General::validity_expired() ) ),
+			'stale'             => ! $running && ( Goldmate_Rate_Items::is_reference_stale() || ( class_exists( 'Goldmate_General' ) && Goldmate_General::validity_expired() ) ),
 			'change_pct'        => $change,
 			'change_pct_html'   => ( class_exists( 'Goldmate_General' ) && Goldmate_General::hide_price_change() ) ? '' : self::format_change_pct( $change ),
 			'provider'          => $provider,
-			'provider_label'    => Goldmate_Rates::provider_label( $provider ),
+			'provider_label'    => Goldmate_Fetcher::provider_label( $provider ),
 			'oos'               => class_exists( 'Goldmate_General' ) && Goldmate_General::products_oos(),
 			'item'              => $item ? $item['slug'] : 'gold18',
 			'item_label'        => $item ? $item['label'] : '',
@@ -221,10 +301,10 @@ class Goldmate_Live {
 	public static function applied_rate() {
 
 		if ( ! Goldmate_Batch::is_running() ) {
-			return goldmate_positive_float( goldmate_option( 'goldmate_rate_per_gram' ) );
+			return goldmate_reference_rate();
 		}
 
-		$history = Goldmate_Rates::history();
+		$history = Goldmate_Rate_Items::reference_history( 5 );
 
 		return isset( $history[1]['rate'] ) ? goldmate_positive_float( $history[1]['rate'] ) : 0.0;
 	}
@@ -240,7 +320,7 @@ class Goldmate_Live {
 		if ( $item_id > 0 && class_exists( 'Goldmate_Rate_Items' ) ) {
 			$history = Goldmate_Rate_Items::history( $item_id, 2 );
 		} else {
-			$history = Goldmate_Rates::history();
+			$history = Goldmate_Rate_Items::reference_history( 2 );
 		}
 
 		if ( count( $history ) < 2 ) {

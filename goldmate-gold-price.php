@@ -15,7 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'GOLDMATE_VERSION', '3.4.5' );
+define( 'GOLDMATE_VERSION', '3.4.7' );
 define( 'GOLDMATE_FILE', __FILE__ );
 define( 'GOLDMATE_PATH', plugin_dir_path( __FILE__ ) );
 define( 'GOLDMATE_URL', plugin_dir_url( __FILE__ ) );
@@ -23,12 +23,13 @@ define( 'GOLDMATE_URL', plugin_dir_url( __FILE__ ) );
 require_once GOLDMATE_PATH . 'includes/functions.php';
 require_once GOLDMATE_PATH . 'includes/class-goldmate-install.php';
 require_once GOLDMATE_PATH . 'includes/class-goldmate-rate-items.php';
+require_once GOLDMATE_PATH . 'includes/class-goldmate-formulas.php';
 require_once GOLDMATE_PATH . 'includes/class-goldmate-fetcher.php';
 require_once GOLDMATE_PATH . 'includes/class-goldmate-admin-items.php';
+require_once GOLDMATE_PATH . 'includes/class-goldmate-admin-formulas.php';
 require_once GOLDMATE_PATH . 'includes/class-goldmate-calculator.php';
 require_once GOLDMATE_PATH . 'includes/class-goldmate-pricing.php';
 require_once GOLDMATE_PATH . 'includes/class-goldmate-batch.php';
-require_once GOLDMATE_PATH . 'includes/class-goldmate-rates.php';
 require_once GOLDMATE_PATH . 'includes/class-goldmate-product-fields.php';
 require_once GOLDMATE_PATH . 'includes/class-goldmate-display.php';
 require_once GOLDMATE_PATH . 'includes/class-goldmate-order.php';
@@ -81,7 +82,6 @@ function goldmate_init() {
 
 	Goldmate_Pricing::init();
 	Goldmate_Batch::init();
-	Goldmate_Rates::init();
 	Goldmate_Fetcher::init();
 	Goldmate_Product_Fields::init();
 	Goldmate_Display::init();
@@ -104,9 +104,16 @@ function goldmate_activate() {
 	require_once GOLDMATE_PATH . 'includes/functions.php';
 	require_once GOLDMATE_PATH . 'includes/class-goldmate-install.php';
 	require_once GOLDMATE_PATH . 'includes/class-goldmate-rate-items.php';
-	require_once GOLDMATE_PATH . 'includes/class-goldmate-rates.php';
+	require_once GOLDMATE_PATH . 'includes/class-goldmate-formulas.php';
+	require_once GOLDMATE_PATH . 'includes/class-goldmate-fetcher.php';
 	Goldmate_Install::install();
-	Goldmate_Rates::reschedule();
+	Goldmate_Fetcher::ensure_scheduled();
+	// Retired global fetch hook (replaced by goldmate_fetch_rate_items).
+	if ( function_exists( 'as_unschedule_all_actions' ) ) {
+		as_unschedule_all_actions( 'goldmate_fetch_rate', null, 'goldmate' );
+	}
+	wp_clear_scheduled_hook( 'goldmate_fetch_rate' );
+	wp_unschedule_hook( 'goldmate_fetch_rate' );
 }
 register_activation_hook( __FILE__, 'goldmate_activate' );
 
@@ -115,12 +122,15 @@ register_activation_hook( __FILE__, 'goldmate_activate' );
  */
 function goldmate_deactivate() {
 	require_once GOLDMATE_PATH . 'includes/functions.php';
-	require_once GOLDMATE_PATH . 'includes/class-goldmate-rates.php';
 	require_once GOLDMATE_PATH . 'includes/class-goldmate-fetcher.php';
 	require_once GOLDMATE_PATH . 'includes/class-goldmate-batch.php';
-	Goldmate_Rates::unschedule();
 	Goldmate_Fetcher::unschedule();
 	Goldmate_Batch::cancel();
+	// Clear retired legacy cron if still present.
+	if ( function_exists( 'as_unschedule_all_actions' ) ) {
+		as_unschedule_all_actions( 'goldmate_fetch_rate', null, 'goldmate' );
+	}
+	wp_unschedule_hook( 'goldmate_fetch_rate' );
 }
 register_deactivation_hook( __FILE__, 'goldmate_deactivate' );
 

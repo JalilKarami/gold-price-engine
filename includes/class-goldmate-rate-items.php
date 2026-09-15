@@ -288,30 +288,25 @@ class Goldmate_Rate_Items {
 	}
 
 	/**
-	 * Resolve rate item for a product ID.
+	 * Resolve rate item for a product via its named formula.
 	 *
 	 * @param int $product_id Product or variation ID.
 	 * @return array|null
 	 */
 	public static function for_product( $product_id ) {
 		$product_id = (int) $product_id;
-		$slug       = '';
 
-		if ( $product_id > 0 ) {
-			$slug = (string) get_post_meta( $product_id, '_goldmate_rate_item', true );
-			if ( '' === $slug ) {
-				$parent = wp_get_post_parent_id( $product_id );
-				if ( $parent ) {
-					$slug = (string) get_post_meta( $parent, '_goldmate_rate_item', true );
+		if ( $product_id > 0 && class_exists( 'Goldmate_Formulas' ) ) {
+			$formula = Goldmate_Formulas::for_product( $product_id );
+			if ( $formula ) {
+				$item = self::get_by_slug( $formula['rate_slug'] );
+				if ( $item ) {
+					return $item;
 				}
 			}
 		}
 
-		if ( '' === $slug ) {
-			$slug = self::DEFAULT_SLUG;
-		}
-
-		$item = self::get_by_slug( $slug );
+		$item = self::get_by_slug( self::DEFAULT_SLUG );
 		return $item ? $item : self::get_default();
 	}
 
@@ -330,9 +325,76 @@ class Goldmate_Rate_Items {
 	 */
 	public static function rate_18_for_calculator( $item ) {
 		if ( empty( $item ) ) {
-			return goldmate_positive_float( goldmate_option( 'goldmate_rate_per_gram' ) );
+			return goldmate_reference_rate();
 		}
 		return goldmate_positive_float( $item['rate'] );
+	}
+
+	/**
+	 * The gold18 reference item row, or null.
+	 *
+	 * @return array|null
+	 */
+	public static function reference_item() {
+		return self::get_by_slug( self::DEFAULT_SLUG );
+	}
+
+	/**
+	 * True when the gold18 reference rate is older than goldmate_stale_hours.
+	 *
+	 * @return bool
+	 */
+	public static function is_reference_stale() {
+
+		$hours = (float) goldmate_option( 'goldmate_stale_hours' );
+		if ( $hours <= 0 ) {
+			return false;
+		}
+
+		$item = self::reference_item();
+		$updated = $item ? (int) $item['updated_at'] : (int) get_option( 'goldmate_rate_updated_at', 0 );
+
+		if ( $updated <= 0 ) {
+			return true;
+		}
+
+		return ( time() - $updated ) > (int) ( $hours * HOUR_IN_SECONDS );
+	}
+
+	/**
+	 * Newest-first history for the gold18 reference item (admin / live fallback).
+	 *
+	 * @param int $limit Rows.
+	 * @return array[]
+	 */
+	public static function reference_history( $limit = 30 ) {
+		$item = self::reference_item();
+		if ( ! $item ) {
+			return array();
+		}
+		return self::history( (int) $item['id'], $limit );
+	}
+
+	/**
+	 * Delete history rows older than N hours (all items).
+	 *
+	 * @param float $hours Retention hours; <=0 skips.
+	 */
+	public static function prune_history_older_than( $hours ) {
+		global $wpdb;
+
+		$hours = (float) $hours;
+		if ( $hours <= 0 ) {
+			return;
+		}
+
+		$cutoff = time() - (int) ( $hours * HOUR_IN_SECONDS );
+		$wpdb->query(
+			$wpdb->prepare(
+				'DELETE FROM ' . self::history_table() . ' WHERE recorded_at < %d',
+				$cutoff
+			)
+		);
 	}
 
 	/**

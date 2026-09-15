@@ -82,29 +82,11 @@ function goldmate_defaults() {
 		'goldmate_order_auto_cancel_minutes'  => 30,
 		'goldmate_hide_shortcode_outofstock'  => 'yes',
 
-		// Automatic rate fetching.
-		'goldmate_rate_source'           => 'manual',
-		'goldmate_api_url'               => '',
-		'goldmate_api_key'               => '',
-		'goldmate_api_key_header'        => '',
-		'goldmate_api_path'              => '',
-		'goldmate_api_multiplier'        => 1,
-		'goldmate_api_time_path'         => '',
-		'goldmate_api_max_age'           => 0,
-		'goldmate_fallback_source'       => 'none',
-		'goldmate_fallback_api_url'      => '',
-		'goldmate_fallback_api_key'      => '',
-		'goldmate_fallback_api_key_header' => '',
-		'goldmate_fallback_api_path'     => '',
-		'goldmate_fallback_api_multiplier' => 1,
-		'goldmate_fallback_api_time_path' => '',
-		'goldmate_fallback_api_max_age'  => 0,
-		'goldmate_rate_adjust_mode'      => 'none',
-		'goldmate_rate_adjust_value'     => 0,
-		'goldmate_fetch_interval'        => 60,
-		'goldmate_max_deviation'         => 20,
-		'goldmate_min_change_pct'        => 0.4,
-		'goldmate_min_change_amount'     => 0,
+		// Automatic rate fetching (per rate-item; global API settings retired).
+		'goldmate_fetch_interval'    => 60,
+		'goldmate_max_deviation'     => 20,
+		'goldmate_min_change_pct'    => 0.4,
+		'goldmate_min_change_amount' => 0,
 
 		// Live storefront refresh (seconds; 0 disables). Synced from AJAX product interval.
 		'goldmate_live_interval' => 60,
@@ -400,4 +382,40 @@ function goldmate_format_time( $timestamp ) {
 	}
 
 	return wp_date( 'Y/m/d H:i', $timestamp + goldmate_date_offset_fix() );
+}
+
+/**
+ * Sanitises an endpoint URL without destroying the {KEY} placeholder.
+ *
+ * `esc_url_raw()` strips braces, which turns `?key={KEY}` into `?key=KEY`.
+ *
+ * @param string $url Submitted URL.
+ * @return string
+ */
+function goldmate_sanitize_endpoint_url( $url ) {
+
+	$url   = (string) $url;
+	$token = 'goldmateKeyPlaceholder';
+
+	$url = str_replace( array( '{KEY}', '%7BKEY%7D', '%7bkey%7d' ), $token, $url );
+	$url = esc_url_raw( $url, array( 'http', 'https' ) );
+
+	return str_replace( $token, '{KEY}', $url );
+}
+
+/**
+ * Current 18k reference rate from the gold18 rate item (option is a mirror only).
+ *
+ * @return float
+ */
+function goldmate_reference_rate() {
+
+	if ( class_exists( 'Goldmate_Rate_Items' ) ) {
+		$item = Goldmate_Rate_Items::get_by_slug( Goldmate_Rate_Items::DEFAULT_SLUG );
+		if ( $item && goldmate_positive_float( $item['rate'] ) > 0 ) {
+			return goldmate_positive_float( $item['rate'] );
+		}
+	}
+
+	return goldmate_positive_float( goldmate_option( 'goldmate_rate_per_gram' ) );
 }

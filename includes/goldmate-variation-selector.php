@@ -106,18 +106,28 @@ class Goldmate_Variation_Selector {
 	 */
 	public static function output_frontend_data() {
 
+		global $product;
+
 		if (!is_product()) {
 			return;
 		}
 
-		$rate = goldmate_positive_float(goldmate_option('goldmate_rate_per_gram'));
+		$rate = function_exists( 'goldmate_reference_rate' )
+			? goldmate_reference_rate()
+			: goldmate_positive_float( goldmate_option( 'goldmate_rate_per_gram' ) );
+
+		// Prefer the rate item behind this product's formula when available.
+		if ( $product && is_a( $product, 'WC_Product' ) && class_exists( 'Goldmate_Rate_Items' ) ) {
+			$item = Goldmate_Rate_Items::for_product( (int) $product->get_id() );
+			if ( $item && goldmate_positive_float( $item['rate'] ) > 0 ) {
+				$rate = goldmate_positive_float( $item['rate'] );
+			}
+		}
 
 		$payload = array(
 			'rate'      => $rate,
-			'rate_html' => $rate > 0 ? wc_price($rate) : '',
+			'rate_html' => $rate > 0 ? wc_price( $rate ) : '',
 		);
-
-		global $product;
 
 		if ($product && is_a($product, 'WC_Product') && $product->is_type('simple')) {
 			$weight = $product->get_meta('_goldmate_weight', true);

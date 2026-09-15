@@ -126,7 +126,8 @@ class Goldmate_Discounts {
 	 * @return bool
 	 */
 	public static function within_dates( $from, $to ) {
-		$today = gmdate( 'Y-m-d' );
+		// Product date fields are site-local; compare in site timezone, not UTC.
+		$today = function_exists( 'current_time' ) ? current_time( 'Y-m-d' ) : gmdate( 'Y-m-d' );
 		if ( $from && $today < $from ) {
 			return false;
 		}

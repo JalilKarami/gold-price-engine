@@ -202,7 +202,7 @@ class Goldmate_Shortcodes {
 			),
 			array(
 				'id'       => 'item_name',
-				'usage'    => 'نام آیتم نرخ محصول',
+				'usage'    => 'نام آیتم نرخ (از فرمول محصول)',
 				'title_key'=> 'item_name',
 				'shortcode'=> "[goldmate_details key='item_name' title='" . self::title( 'item_name' ) . "']",
 			),
@@ -381,7 +381,9 @@ class Goldmate_Shortcodes {
 			return '';
 		}
 
-		return Goldmate_Display::render_block( $b );
+		// Explicit shortcode placement always shows the table, even when the
+		// product-page "show breakdown" toggle is off.
+		return Goldmate_Display::render_block( $b, true );
 	}
 
 	/**

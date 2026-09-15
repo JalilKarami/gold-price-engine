@@ -223,7 +223,7 @@ class Goldmate_Admin_Items {
 	 * Prefills connection fields when a named preset is chosen.
 	 */
 	protected static function print_preset_script() {
-		$presets = class_exists( 'Goldmate_Rates' ) ? Goldmate_Rates::presets() : array();
+		$presets = class_exists( 'Goldmate_Fetcher' ) ? Goldmate_Fetcher::presets() : array();
 		?>
 		<script type="application/json" id="goldmate-item-presets"><?php echo wp_json_encode( $presets ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></script>
 		<script>
@@ -517,7 +517,7 @@ class Goldmate_Admin_Items {
 			}
 
 			$config = array(
-				'url'            => isset( $row['url'] ) ? esc_url_raw( wp_unslash( $row['url'] ) ) : '',
+				'url'            => isset( $row['url'] ) ? goldmate_sanitize_endpoint_url( wp_unslash( $row['url'] ) ) : '',
 				'path'           => isset( $row['path'] ) ? sanitize_text_field( wp_unslash( $row['path'] ) ) : '',
 				'selector'       => isset( $row['selector'] ) ? sanitize_text_field( wp_unslash( $row['selector'] ) ) : '',
 				'api_key'        => isset( $row['api_key'] ) ? sanitize_text_field( wp_unslash( $row['api_key'] ) ) : '',

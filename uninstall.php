@@ -63,6 +63,7 @@ function goldmate_uninstall_delete_data() {
 
 	$wpdb->query( 'DROP TABLE IF EXISTS ' . $wpdb->prefix . 'goldmate_rate_history' ); // phpcs:ignore
 	$wpdb->query( 'DROP TABLE IF EXISTS ' . $wpdb->prefix . 'goldmate_rate_items' ); // phpcs:ignore
+	$wpdb->query( 'DROP TABLE IF EXISTS ' . $wpdb->prefix . 'goldmate_formulas' ); // phpcs:ignore
 
 	if ( function_exists( 'wc_delete_product_transients' ) ) {
 		wc_delete_product_transients();

@@ -30,15 +30,30 @@ class Goldmate_Calculator {
 			return false;
 		}
 
-		$item = null;
-		if ( class_exists( 'Goldmate_Rate_Items' ) ) {
-			$item = Goldmate_Rate_Items::for_product( (int) $product_id );
+		$formula = null;
+		$item    = null;
+
+		// Named formula → rate item. Empty product meta uses the default formula.
+		if ( class_exists( 'Goldmate_Formulas' ) ) {
+			$formula = Goldmate_Formulas::for_product( (int) $product_id );
+		}
+
+		if ( $formula ) {
+			$inputs['formula_slug'] = $formula['slug'];
+			$inputs['formula_id']   = (int) $formula['id'];
+			$item = class_exists( 'Goldmate_Rate_Items' )
+				? Goldmate_Rate_Items::get_by_slug( $formula['rate_slug'] )
+				: null;
+		}
+
+		if ( ! $item && class_exists( 'Goldmate_Rate_Items' ) ) {
+			$item = Goldmate_Rate_Items::get_by_slug( Goldmate_Rate_Items::DEFAULT_SLUG );
 		}
 
 		if ( $item ) {
 			$rate_18 = Goldmate_Rate_Items::rate_18_for_calculator( $item );
-			$inputs['rate_item']       = $item['slug'];
-			$inputs['rate_item_id']    = (int) $item['id'];
+			$inputs['rate_item']        = $item['slug'];
+			$inputs['rate_item_id']     = (int) $item['id'];
 			$inputs['skip_karat_scale'] = ! Goldmate_Rate_Items::uses_karat_scale( $item );
 
 			// Per-item default profit/tax when product has no override.
@@ -267,6 +282,8 @@ class Goldmate_Calculator {
 			'product_id'            => (int) $product_id,
 			'weight'                => $weight,
 			'karat'                 => $karat,
+			'formula_slug'          => isset( $inputs['formula_slug'] ) ? (string) $inputs['formula_slug'] : '',
+			'formula_id'            => isset( $inputs['formula_id'] ) ? (int) $inputs['formula_id'] : 0,
 			'rate_18'               => $rate_18,
 			'rate'                  => $rate,
 			'rate_before_discount'  => $rate_before_discount,
@@ -495,35 +512,60 @@ class Goldmate_Calculator {
 	 */
 	public static function breakdown_rows( $b ) {
 
+		$map = ( ! empty( $b['discount_map'] ) && is_array( $b['discount_map'] ) ) ? $b['discount_map'] : array();
+
+		$gold_label = sprintf(
+			'مبلغ طلا (%s گرم عیار %s × %s)',
+			wc_format_localized_decimal( $b['weight'] ),
+			wc_format_localized_decimal( $b['karat'] ),
+			goldmate_plain_price( $b['rate'] )
+		);
+		if ( ! empty( $map['rate'] ) || ! empty( $map['gold'] ) ) {
+			$gold_label .= ' — با تخفیف';
+		}
+
+		$wage_label = self::wage_label( $b );
+		if ( ! empty( $map['wage'] ) ) {
+			$wage_label .= ' — با تخفیف';
+		}
+
+		$profit_label = sprintf( 'سود (%s٪)', wc_format_localized_decimal( $b['profit_pct'] ) );
+		if ( ! empty( $map['profit'] ) ) {
+			$profit_label .= ' — با تخفیف';
+		}
+
 		$rows = array(
-			array(
-				sprintf(
-					'مبلغ طلا (%s گرم عیار %s × %s)',
-					wc_format_localized_decimal( $b['weight'] ),
-					wc_format_localized_decimal( $b['karat'] ),
-					goldmate_plain_price( $b['rate'] )
-				),
-				$b['gold'],
-			),
-			array( self::wage_label( $b ), $b['wage'] ),
-			array( sprintf( 'سود (%s٪)', wc_format_localized_decimal( $b['profit_pct'] ) ), $b['profit'] ),
+			array( $gold_label, $b['gold'] ),
+			array( $wage_label, $b['wage'] ),
+			array( $profit_label, $b['profit'] ),
 		);
 
 		if ( $b['accessories'] > 0 ) {
-			$split_ok = empty( $b['discount_map']['accessories'] )
-				&& empty( $b['discount_map']['accessories_per_gram'] )
-				&& empty( $b['discount_map']['gold_and_accessories'] )
-				&& ( ! empty( $b['stone'] ) || ! empty( $b['leather'] ) );
+			$has_split = ( ! empty( $b['stone'] ) && $b['stone'] > 0 )
+				|| ( ! empty( $b['leather'] ) && $b['leather'] > 0 );
+			$acc_discounted = ! empty( $map['accessories'] )
+				|| ! empty( $map['accessories_per_gram'] )
+				|| ! empty( $map['gold_and_accessories'] );
+			$disc_note = $acc_discounted ? ' — با تخفیف' : '';
 
-			if ( $split_ok ) {
-				if ( ! empty( $b['stone'] ) && $b['stone'] > 0 ) {
-					$rows[] = array( 'سنگ', $b['stone'] );
+			// Prefer stone/leather lines when both (or either) are set so the storefront shows every item.
+			if ( $has_split ) {
+				$stone   = ! empty( $b['stone'] ) ? (float) $b['stone'] : 0.0;
+				$leather = ! empty( $b['leather'] ) ? (float) $b['leather'] : 0.0;
+				$raw_sum = $stone + $leather;
+				$acc     = (float) $b['accessories'];
+
+				// When an accessories discount reduced the combined total, scale lines proportionally.
+				$scale = ( $raw_sum > 0 && abs( $raw_sum - $acc ) > 0.01 ) ? ( $acc / $raw_sum ) : 1.0;
+
+				if ( $stone > 0 ) {
+					$rows[] = array( 'سنگ' . $disc_note, round( $stone * $scale, 2 ) );
 				}
-				if ( ! empty( $b['leather'] ) && $b['leather'] > 0 ) {
-					$rows[] = array( 'چرم و یراق', $b['leather'] );
+				if ( $leather > 0 ) {
+					$rows[] = array( 'چرم و یراق' . $disc_note, round( $leather * $scale, 2 ) );
 				}
 			} else {
-				$rows[] = array( 'ملحقات', $b['accessories'] );
+				$rows[] = array( 'ملحقات' . $disc_note, $b['accessories'] );
 			}
 		}
 
@@ -539,6 +581,13 @@ class Goldmate_Calculator {
 			$rows[] = array(
 				sprintf( 'مالیات بر ارزش افزوده (%s٪ %s)', wc_format_localized_decimal( $b['tax_pct'] ), $tax_base ),
 				$b['tax'],
+			);
+		}
+
+		if ( ! empty( $b['discount_total'] ) && (float) $b['discount_total'] > 0 ) {
+			$rows[] = array(
+				sprintf( 'جمع تخفیف اعمال‌شده (%s)', goldmate_plain_price( $b['discount_total'] ) ),
+				0,
 			);
 		}
 

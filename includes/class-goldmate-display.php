@@ -88,14 +88,15 @@ class Goldmate_Display {
 	/**
 	 * Builds everything shown for one product: the table, the formula, or both.
 	 *
-	 * @param array $b Breakdown from the calculator.
+	 * @param array $b     Breakdown from the calculator.
+	 * @param bool  $force When true, always include the table (explicit shortcode).
 	 * @return string
 	 */
-	public static function render_block( $b ) {
+	public static function render_block( $b, $force = false ) {
 
 		$html = '';
 
-		if ( self::breakdown_enabled() ) {
+		if ( $force || self::breakdown_enabled() ) {
 			$html .= self::render_table( $b );
 		}
 
@@ -247,10 +248,10 @@ class Goldmate_Display {
 		}
 
 		if ( ! Goldmate_Batch::is_running() ) {
-			return goldmate_positive_float( goldmate_option( 'goldmate_rate_per_gram' ) );
+			return goldmate_reference_rate();
 		}
 
-		$history = Goldmate_Rates::history();
+		$history = class_exists( 'Goldmate_Rate_Items' ) ? Goldmate_Rate_Items::reference_history( 5 ) : array();
 
 		return isset( $history[1]['rate'] ) ? goldmate_positive_float( $history[1]['rate'] ) : 0.0;
 	}
@@ -284,7 +285,7 @@ class Goldmate_Display {
 			return '';
 		}
 
-		$stale = ! $updating && Goldmate_Rates::is_stale();
+		$stale = ! $updating && Goldmate_Rate_Items::is_reference_stale();
 
 		$dot_color = $updating ? '#fa941a' : ( $stale ? '#ef5350' : '#26a69a' );
 
@@ -337,7 +338,7 @@ class Goldmate_Display {
 			return $purchasable;
 		}
 
-		if ( ! Goldmate_Rates::is_stale() ) {
+		if ( ! Goldmate_Rate_Items::is_reference_stale() ) {
 			return $purchasable;
 		}
 
@@ -353,7 +354,7 @@ class Goldmate_Display {
 	 */
 	public static function render_stale_notice() {
 
-		if ( 'block' !== goldmate_option( 'goldmate_stale_action' ) || ! Goldmate_Rates::is_stale() ) {
+		if ( 'block' !== goldmate_option( 'goldmate_stale_action' ) || ! Goldmate_Rate_Items::is_reference_stale() ) {
 			return;
 		}
 
