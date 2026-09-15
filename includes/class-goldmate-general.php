@@ -164,23 +164,6 @@ class Goldmate_General {
 	}
 
 	/**
-	 * Reprices one product if the matching trigger is enabled.
-	 *
-	 * @param int    $product_id Product ID.
-	 * @param string $trigger    Option key suffix after goldmate_reprice_.
-	 */
-	public static function maybe_reprice_product( $product_id, $trigger ) {
-
-		$option = 'goldmate_reprice_' . $trigger;
-
-		if ( 'yes' !== goldmate_option( $option ) ) {
-			return;
-		}
-
-		Goldmate_Pricing::apply( (int) $product_id );
-	}
-
-	/**
 	 * Reprices every gold line currently in the cart.
 	 */
 	public static function reprice_cart() {

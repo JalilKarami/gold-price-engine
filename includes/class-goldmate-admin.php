@@ -244,11 +244,6 @@ class Goldmate_Admin {
 				self::notice( 'success', sprintf( 'فرمول قیمت روی %d محصول اعمال شد.', $n ) );
 				break;
 
-			case 'tool_set_rate_item':
-				$n = Goldmate_Tools::set_rate_item( $_POST );
-				self::notice( 'success', sprintf( 'فرمول قیمت روی %d محصول اعمال شد.', $n ) );
-				break;
-
 			case 'tool_set_wage':
 				$n = Goldmate_Tools::set_wage( $_POST );
 				self::notice( 'success', sprintf( 'اجرت روی %d محصول اعمال شد.', $n ) );

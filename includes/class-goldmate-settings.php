@@ -306,12 +306,6 @@ class Goldmate_Settings {
 				'class'  => 'button',
 			),
 			array(
-				'id'    => 'goldmate_history_per_page',
-				'title' => 'آیتم در هر صفحه',
-				'type'  => 'number',
-				'step'  => '1',
-			),
-			array(
 				'id'    => 'goldmate_round_prices',
 				'title' => 'روند کردن قیمت',
 				'type'  => 'checkbox',
@@ -410,11 +404,6 @@ class Goldmate_Settings {
 				'options' => $roles,
 			),
 			array(
-				'id'    => 'goldmate_admin_email',
-				'title' => 'ایمیل مدیر',
-				'type'  => 'text',
-			),
-			array(
 				'id'    => 'goldmate_max_price_validity',
 				'title' => 'حداکثر اعتبار قیمت (دقیقه)',
 				'type'  => 'number',
@@ -489,22 +478,6 @@ class Goldmate_Settings {
 				'type'  => 'number',
 				'step'  => '1',
 				'desc'  => 'ثانیه',
-			),
-			array(
-				'id'      => 'goldmate_jewelry_rate_ref',
-				'title'   => 'مرجع محاسبه قیمت جواهر',
-				'type'    => 'select',
-				'options' => array(
-					'gold_18' => 'طلای ۱۸ عیار (قیمت روز)',
-				),
-			),
-			array(
-				'id'      => 'goldmate_wage_ref',
-				'title'   => 'مرجع محاسبه اجرت ساخت',
-				'type'    => 'select',
-				'options' => array(
-					'default' => 'پیش‌فرض',
-				),
 			),
 			array(
 				'id'      => 'goldmate_tax_method',
@@ -670,9 +643,6 @@ class Goldmate_Settings {
 						break;
 					}
 					$value = sanitize_text_field( wp_unslash( $post[ $id ] ) );
-					if ( 'goldmate_admin_email' === $id && '' !== $value ) {
-						$value = sanitize_email( $value );
-					}
 					if ( 'goldmate_oos_contact_url' === $id && '' !== $value ) {
 						$value = esc_url_raw( $value );
 					}

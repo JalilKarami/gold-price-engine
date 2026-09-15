@@ -6,6 +6,11 @@
  *   wp eval-file wp-content/plugins/goldmate-gold-price/bin/create-demo-products.php
  */
 
+// Dev tooling: WP-CLI only, never reachable over HTTP.
+if ( ! defined( 'WP_CLI' ) || ! WP_CLI ) {
+	exit( 1 );
+}
+
 if ( ! class_exists( 'WooCommerce' ) ) {
 	WP_CLI::error( 'WooCommerce is required.' );
 }

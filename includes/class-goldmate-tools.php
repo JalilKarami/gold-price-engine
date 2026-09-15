@@ -151,24 +151,6 @@ class Goldmate_Tools {
 	}
 
 	/**
-	 * @deprecated 3.2.0 Use set_formula().
-	 * @param array $post POST.
-	 * @return int Count.
-	 */
-	public static function set_rate_item( $post ) {
-		if ( isset( $post['goldmate_tool_rate_item'] ) && ! isset( $post['goldmate_tool_formula'] ) ) {
-			$rate_slug = sanitize_title( wp_unslash( $post['goldmate_tool_rate_item'] ) );
-			$formula   = class_exists( 'Goldmate_Formulas' )
-				? Goldmate_Formulas::ensure_for_rate_slug( $rate_slug )
-				: null;
-			if ( $formula ) {
-				$post['goldmate_tool_formula'] = $formula['slug'];
-			}
-		}
-		return self::set_formula( $post );
-	}
-
-	/**
 	 * @param array $post POST.
 	 * @return int
 	 */

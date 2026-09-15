@@ -2,7 +2,7 @@
 /**
  * Plugin Name: گلدمیت — محاسبه قیمت طلا
  * Description: محاسبه خودکار قیمت محصولات طلا بر اساس وزن، عیار، اجرت (درصدی یا ثابت)، سود، متعلقات و مالیات. شامل دریافت خودکار قیمت روز با منبع جایگزین، بروزرسانی دسته‌ای و نمایش آنی نرخ.
- * Version: 3.4.1
+ * Version: 3.4.7
  * Author: gold-mate.ir
  * Requires Plugins: woocommerce
  * WC requires at least: 7.0
@@ -108,12 +108,6 @@ function goldmate_activate() {
 	require_once GOLDMATE_PATH . 'includes/class-goldmate-fetcher.php';
 	Goldmate_Install::install();
 	Goldmate_Fetcher::ensure_scheduled();
-	// Retired global fetch hook (replaced by goldmate_fetch_rate_items).
-	if ( function_exists( 'as_unschedule_all_actions' ) ) {
-		as_unschedule_all_actions( 'goldmate_fetch_rate', null, 'goldmate' );
-	}
-	wp_clear_scheduled_hook( 'goldmate_fetch_rate' );
-	wp_unschedule_hook( 'goldmate_fetch_rate' );
 }
 register_activation_hook( __FILE__, 'goldmate_activate' );
 
@@ -126,35 +120,5 @@ function goldmate_deactivate() {
 	require_once GOLDMATE_PATH . 'includes/class-goldmate-batch.php';
 	Goldmate_Fetcher::unschedule();
 	Goldmate_Batch::cancel();
-	// Clear retired legacy cron if still present.
-	if ( function_exists( 'as_unschedule_all_actions' ) ) {
-		as_unschedule_all_actions( 'goldmate_fetch_rate', null, 'goldmate' );
-	}
-	wp_unschedule_hook( 'goldmate_fetch_rate' );
 }
 register_deactivation_hook( __FILE__, 'goldmate_deactivate' );
-
-/* -------------------------------------------------------------------------
- *  Backwards-compatible wrappers for the 1.x procedural API.
- * ---------------------------------------------------------------------- */
-
-/**
- * @deprecated 2.0.0 Use Goldmate_Calculator::calculate().
- */
-function goldmate_calculate( $product_id ) {
-	return Goldmate_Calculator::calculate( $product_id );
-}
-
-/**
- * @deprecated 2.0.0 Use Goldmate_Pricing::apply().
- */
-function goldmate_apply_price( $product_id ) {
-	return Goldmate_Pricing::apply( $product_id );
-}
-
-/**
- * @deprecated 2.0.0 Use Goldmate_Batch::start() for a non-blocking rebuild.
- */
-function goldmate_apply_all() {
-	return Goldmate_Pricing::apply_all_now();
-}

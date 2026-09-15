@@ -22,7 +22,33 @@ class Goldmate_Install {
 		self::maybe_seed_provider_gold18_items();
 		self::maybe_seed_formulas();
 		self::maybe_migrate_rate_item_meta_to_formulas();
+		self::maybe_clear_retired_cron();
 		update_option( self::DB_OPTION, self::DB_VERSION, false );
+	}
+
+	/**
+	 * Drops the retired global `goldmate_fetch_rate` job, once.
+	 *
+	 * Fetching moved to the per-rate-item `goldmate_fetch_rate_items` job, but a
+	 * site upgraded from before that still carries the old schedule. Clearing it
+	 * is a migration, not a lifecycle step, so it runs once behind a flag rather
+	 * than on every activate and deactivate.
+	 */
+	protected static function maybe_clear_retired_cron() {
+
+		$flag = 'goldmate_cleared_retired_fetch_cron';
+
+		if ( get_option( $flag ) ) {
+			return;
+		}
+
+		if ( function_exists( 'as_unschedule_all_actions' ) ) {
+			as_unschedule_all_actions( 'goldmate_fetch_rate', null, 'goldmate' );
+		}
+		wp_clear_scheduled_hook( 'goldmate_fetch_rate' );
+		wp_unschedule_hook( 'goldmate_fetch_rate' );
+
+		update_option( $flag, 1, false );
 	}
 
 	/**
