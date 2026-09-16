@@ -1,0 +1,79 @@
+/* Live price preview on the product edit screen. */
+
+.goldmate-preview {
+	margin: 12px;
+	border: 1px solid #c3c4c7;
+	border-radius: 4px;
+	background: #f6f7f7;
+	transition: opacity 0.15s;
+}
+
+.goldmate-preview.is-calculating {
+	opacity: 0.55;
+}
+
+.goldmate-preview-head {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 4px 12px;
+	padding: 10px 12px;
+}
+
+.goldmate-preview-title {
+	font-weight: 600;
+}
+
+.goldmate-preview-total {
+	font-size: 18px;
+	font-weight: 700;
+	color: #1d2327;
+}
+
+.goldmate-preview-body {
+	padding: 0 12px 8px;
+	border-top: 1px solid #dcdcde;
+}
+
+.goldmate-preview table {
+	width: 100%;
+	margin: 8px 0 0;
+	border-collapse: collapse;
+}
+
+.goldmate-preview th,
+.goldmate-preview td {
+	padding: 5px 0;
+	border-bottom: 1px solid #e5e5e5;
+	text-align: right;
+	vertical-align: top;
+}
+
+.goldmate-preview-rows td:last-child,
+.goldmate-preview-variations td:last-child,
+.goldmate-preview-variations th:last-child {
+	text-align: left;
+	white-space: nowrap;
+}
+
+.goldmate-preview-rows tr.is-total td {
+	border-bottom: 0;
+	font-weight: 700;
+}
+
+.goldmate-preview-variations th {
+	font-weight: 600;
+}
+
+#woocommerce-product-data .goldmate-preview p.goldmate-preview-message,
+#woocommerce-product-data .goldmate-preview p.goldmate-preview-note {
+	margin: 8px 0;
+	padding: 0;
+	color: #646970;
+	font-size: 12px;
+}
+
+#woocommerce-product-data .goldmate-preview p.goldmate-preview-note {
+	padding: 0 12px 4px;
+}

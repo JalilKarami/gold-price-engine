@@ -50,12 +50,10 @@ class Goldmate_Pricing {
 		add_action( 'woocommerce_update_product_variation', array( __CLASS__, 'on_variation_saved' ), 20, 2 );
 		add_action( 'woocommerce_new_product_variation', array( __CLASS__, 'on_variation_saved' ), 20, 2 );
 
-		// The classic admin "Save changes" button in the Variations panel writes
-		// the goldmate variation fields on this hook (see
-		// Goldmate_Product_Fields::save_variation_fields(), priority 10), which
-		// fires *after* woocommerce_update_product_variation. Reprice again here,
-		// at a later priority, so the price is built from the values that were
-		// just saved instead of the ones still in postmeta a moment earlier.
+		// The classic admin "Save changes" button in the Variations panel fires
+		// this after woocommerce_update_product_variation. Gold values are no
+		// longer edited there (see Goldmate_Variation_Table), but other plugins
+		// may still write them on this hook, so reprice once more afterwards.
 		add_action( 'woocommerce_save_product_variation', array( __CLASS__, 'on_variation_saved' ), 20, 2 );
 
 		// CSV importer.

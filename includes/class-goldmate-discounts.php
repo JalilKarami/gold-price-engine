@@ -67,11 +67,12 @@ class Goldmate_Discounts {
 	/**
 	 * Resolve effective discounts for a product: product → category → global.
 	 *
-	 * @param int $product_id Product or variation ID.
+	 * @param int        $product_id    Product or variation ID.
+	 * @param array|null $product_layer Unsaved product layer (edit-screen preview) used instead of the stored one.
 	 * @return array{enabled:bool,items:array,source:string,date_from:string,date_to:string}
 	 */
-	public static function resolve( $product_id ) {
-		$product = self::get( $product_id );
+	public static function resolve( $product_id, $product_layer = null ) {
+		$product = is_array( $product_layer ) ? $product_layer : self::get( $product_id );
 		if ( self::layer_applies( $product ) ) {
 			$product['source'] = 'product';
 			return $product;

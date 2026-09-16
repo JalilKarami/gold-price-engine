@@ -43,7 +43,6 @@ class Goldmate_Accessories {
 	 */
 	public static function init() {
 
-		add_action( 'woocommerce_product_options_related', array( __CLASS__, 'render_admin_panel' ), 5 );
 		add_action( 'woocommerce_process_product_meta', array( __CLASS__, 'save_admin_panel' ), 20 );
 		add_action( 'admin_enqueue_scripts', array( __CLASS__, 'enqueue_admin' ) );
 
@@ -250,7 +249,7 @@ class Goldmate_Accessories {
 	 * ------------------------------------------------------------------ */
 
 	/**
-	 * Product-edit panel under Linked Products.
+	 * Product-edit block, printed inside the gold tab by Goldmate_Product_Fields.
 	 */
 	public static function render_admin_panel() {
 
@@ -263,7 +262,6 @@ class Goldmate_Accessories {
 		$groups = self::get_groups( $post->ID );
 
 		echo '<div class="options_group show_if_simple show_if_variable goldmate-accessory-admin">';
-		echo '<p class="form-field" style="margin-bottom:4px;"><strong>متعلقات قابل انتخاب (زنجیر، جعبه، …)</strong></p>';
 		echo '<p class="form-field" style="margin-top:0;color:#646970;">هر گروه یک انتخاب اختیاری است (مثلاً زنجیر). محصولات لینک‌شده به‌عنوان خط جدا در سبد اضافه می‌شوند و با گلدمیت قیمت‌گذاری می‌مانند — نه به‌عنوان ویژگی متغیر.</p>';
 
 		$next = empty( $groups ) ? 1 : count( $groups );

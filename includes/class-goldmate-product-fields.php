@@ -2,8 +2,10 @@
 /**
  * Per-product and per-variation calculation inputs.
  *
- * UX mirrors Ratesbox: a "نرخ خودکار" checkbox next to Virtual/Downloadable
- * unlocks a dedicated product-data tab (not a separate WooCommerce product type).
+ * Everything a gold product needs lives in one "نرخ خودکار" product-data tab:
+ * the on/off switch, a live price preview, the main inputs, and collapsible
+ * extras / discount / advanced / accessories sections. It is a product option,
+ * not a separate WooCommerce product type.
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -17,15 +19,11 @@ class Goldmate_Product_Fields {
 	 */
 	public static function init() {
 
-		add_filter( 'product_type_options', array( __CLASS__, 'product_type_option' ) );
 		add_filter( 'woocommerce_product_data_tabs', array( __CLASS__, 'product_data_tab' ) );
 		add_action( 'woocommerce_product_data_panels', array( __CLASS__, 'render_product_panel' ) );
-		add_action( 'woocommerce_product_data_panels', array( __CLASS__, 'render_discount_panel' ) );
 		add_action( 'woocommerce_admin_process_product_object', array( __CLASS__, 'save_product_object' ) );
 		add_action( 'admin_enqueue_scripts', array( __CLASS__, 'admin_assets' ) );
 
-		add_action( 'woocommerce_variation_options_pricing', array( __CLASS__, 'render_variation_fields' ), 10, 3 );
-		add_action( 'woocommerce_save_product_variation', array( __CLASS__, 'save_variation_fields' ), 10, 2 );
 		add_filter(
 			'woocommerce_available_variation',
 			array( __CLASS__, 'add_goldmate_variation_data' ),
@@ -35,31 +33,10 @@ class Goldmate_Product_Fields {
 	}
 
 	/**
-	 * Adds "نرخ خودکار" beside Virtual / Downloadable.
+	 * Adds the "نرخ خودکار" product data tab.
 	 *
-	 * This is NOT a new product type — it is a product option that toggles
-	 * automatic gold pricing on simple and variable products.
-	 *
-	 * @param array $options Existing type options.
-	 * @return array
-	 */
-	public static function product_type_option( $options ) {
-
-		// Array key must be "goldmate_enabled" so WooCommerce checks meta `_goldmate_enabled`
-		// (it looks up '_' . $key — not the checkbox id).
-		$options['goldmate_enabled'] = array(
-			'id'            => '_goldmate_enabled',
-			'wrapper_class' => 'show_if_simple show_if_variable',
-			'label'         => 'نرخ خودکار',
-			'description'   => 'قیمت این محصول از روی وزن، عیار، اجرت و قیمت روز طلا محاسبه شود.',
-			'default'       => 'no',
-		);
-
-		return $options;
-	}
-
-	/**
-	 * Adds the dedicated "نرخ خودکار" product data tab.
+	 * The tab is always there for simple and variable products, so the switch
+	 * that turns gold pricing on is never hidden behind itself.
 	 *
 	 * @param array $tabs Existing tabs.
 	 * @return array
@@ -69,22 +46,15 @@ class Goldmate_Product_Fields {
 		$tabs['goldmate'] = array(
 			'label'    => 'نرخ خودکار',
 			'target'   => 'goldmate_product_data',
-			'class'    => array( 'show_if_simple', 'show_if_variable', 'show_if_goldmate' ),
+			'class'    => array( 'show_if_simple', 'show_if_variable' ),
 			'priority' => 65,
-		);
-
-		$tabs['goldmate_discount'] = array(
-			'label'    => 'تخفیف',
-			'target'   => 'goldmate_discount_data',
-			'class'    => array( 'show_if_simple', 'show_if_variable', 'show_if_goldmate' ),
-			'priority' => 66,
 		);
 
 		return $tabs;
 	}
 
 	/**
-	 * Enqueues small admin CSS/JS so the tab behaves like Ratesbox.
+	 * Enqueues the panel's styles and behaviour on the product edit screen.
 	 *
 	 * @param string $hook Current admin page.
 	 */
@@ -100,99 +70,106 @@ class Goldmate_Product_Fields {
 			return;
 		}
 
-		wp_add_inline_style(
-			'woocommerce_admin_styles',
-			'
-			#woocommerce-product-data ul.wc-tabs li.goldmate_options a::before { content: "\f185"; font-family: dashicons; }
-			#woocommerce-product-data ul.wc-tabs li.goldmate_discount_options a::before { content: "\f323"; font-family: dashicons; }
-			#goldmate_product_data .goldmate-panel-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
-			#goldmate_product_data .goldmate-panel-grid .form-field { float: none; width: auto; padding: 5px 0 5px 162px !important; margin: 0; }
-			#goldmate_product_data .options_group { border-top: 1px solid #eee; }
-			#goldmate_discount_data .goldmate-discount-table { width: 100%; border-collapse: collapse; margin: 12px; }
-			#goldmate_discount_data .goldmate-discount-table th,
-			#goldmate_discount_data .goldmate-discount-table td { padding: 10px 8px; border-bottom: 1px solid #eee; text-align: right; vertical-align: middle; }
-			#goldmate_discount_data .goldmate-discount-table th { background: #f6f7f7; font-weight: 600; }
-			#goldmate_discount_data .goldmate-discount-table select,
-			#goldmate_discount_data .goldmate-discount-table input[type="number"] { width: 100%; max-width: 160px; }
-			#goldmate_discount_data .goldmate-discount-table input[type="checkbox"] {
-				width: 18px !important;
-				height: 18px !important;
-				min-width: 18px !important;
-				margin: 0 !important;
-				float: none !important;
-				position: static !important;
-				cursor: pointer;
-				pointer-events: auto !important;
+		foreach ( array( 'css/product-panel.css', 'js/product-panel.js' ) as $asset ) {
+			$mtime   = @filemtime( GOLDMATE_PATH . 'assets/' . $asset ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+			$version = $mtime ? GOLDMATE_VERSION . '.' . $mtime : GOLDMATE_VERSION;
+
+			if ( 'css' === substr( $asset, 0, 3 ) ) {
+				wp_enqueue_style( 'goldmate-product-panel', GOLDMATE_URL . 'assets/' . $asset, array(), $version );
+			} else {
+				wp_enqueue_script( 'goldmate-product-panel', GOLDMATE_URL . 'assets/' . $asset, array( 'jquery' ), $version, true );
 			}
-			#goldmate_discount_data ._goldmate_discounts_enabled_field .description {
-				display: block;
-				clear: both;
-				margin-top: 6px;
-				max-width: 100%;
-			}
-			#goldmate_discount_data ._goldmate_discounts_enabled_field input.checkbox {
-				position: relative;
-				z-index: 2;
-				pointer-events: auto !important;
-			}
-			#goldmate_discount_data.goldmate-discounts-off .goldmate-discount-table {
-				opacity: 0.55;
-			}
-			#goldmate_discount_data.goldmate-discounts-off .goldmate-discount-table select,
-			#goldmate_discount_data.goldmate-discounts-off .goldmate-discount-table input[type="number"] {
-				pointer-events: none;
-			}
-			@media (max-width: 900px) {
-				#goldmate_product_data .goldmate-panel-grid { grid-template-columns: 1fr; }
-			}
-			'
+		}
+	}
+
+	/**
+	 * Works out the wage mode from which wage fields are filled in.
+	 *
+	 * Combined wage is (weight × fixed) + (gold × %), so it equals the percent
+	 * mode when fixed is zero and the fixed mode when the percent is zero. That
+	 * lets the form show both fields with no mode dropdown.
+	 *
+	 * @param mixed  $pct     Raw wage percent.
+	 * @param mixed  $fixed   Raw fixed wage per gram.
+	 * @param string $current Mode to keep when both are empty.
+	 * @return string `pct`, `fixed`, `combined`, or $current.
+	 */
+	public static function derive_wage_mode( $pct, $fixed, $current = '' ) {
+
+		$pct   = goldmate_positive_float( $pct );
+		$fixed = goldmate_positive_float( $fixed );
+
+		if ( $pct > 0 && $fixed > 0 ) {
+			return 'combined';
+		}
+
+		if ( $fixed > 0 ) {
+			return 'fixed';
+		}
+
+		if ( $pct > 0 ) {
+			return 'pct';
+		}
+
+		return (string) $current;
+	}
+
+	/**
+	 * Turns the posted discount table into stored rows.
+	 *
+	 * A row is on exactly when its amount is above zero, and the product layer
+	 * is on when any row is, so the form needs no checkboxes.
+	 *
+	 * @param mixed $posted Raw `_goldmate_discounts` array.
+	 * @return array{enabled:bool,items:array}
+	 */
+	public static function discount_rows_from_post( $posted ) {
+
+		$posted  = is_array( $posted ) ? $posted : array();
+		$items   = array();
+		$enabled = false;
+
+		foreach ( Goldmate_Discounts::targets() as $key => $def ) {
+			$row    = isset( $posted[ $key ] ) && is_array( $posted[ $key ] ) ? $posted[ $key ] : array();
+			$amount = goldmate_positive_float( isset( $row['amount'] ) ? $row['amount'] : 0 );
+
+			$items[ $key ] = array(
+				'enabled' => $amount > 0 ? 'yes' : 'no',
+				'type'    => ( isset( $row['type'] ) && 'pct' === $row['type'] ) ? 'pct' : 'fixed',
+				'amount'  => $amount,
+			);
+
+			$enabled = $enabled || $amount > 0;
+		}
+
+		return array(
+			'enabled' => $enabled,
+			'items'   => $items,
 		);
+	}
 
-		wp_add_inline_script(
-			'woocommerce_admin',
-			"
-			jQuery( function ( $ ) {
-				function syncGoldmateWageFields() {
-					var mode = $( '#_goldmate_wage_mode' ).val();
-					$( '._goldmate_wage_pct_field' ).toggle( mode === 'pct' || mode === 'combined' );
-					$( '._goldmate_wage_fixed_field' ).toggle( mode === 'fixed' || mode === 'combined' );
-				}
-				$( document.body ).on( 'change', '#_goldmate_wage_mode', syncGoldmateWageFields );
-				syncGoldmateWageFields();
+	/**
+	 * Opens a collapsible panel section.
+	 *
+	 * @param string $key   Section key, used by the script for its summary.
+	 * @param string $title Section title.
+	 * @param bool   $open  Start expanded.
+	 */
+	protected static function open_section( $key, $title, $open ) {
 
-				function syncGoldmateDiscountPanel() {
-					var on = $( '#_goldmate_discounts_enabled' ).is( ':checked' );
-					$( '#goldmate_discount_data' ).toggleClass( 'goldmate-discounts-off', ! on );
-				}
-				$( document.body ).on( 'change', '#_goldmate_discounts_enabled', syncGoldmateDiscountPanel );
-				// Row checkboxes stay clickable even when master is off; turn master on when enabling a row.
-				$( document.body ).on( 'change', '#goldmate_discount_data .goldmate-discount-table input[type=checkbox]', function () {
-					if ( $( this ).is( ':checked' ) && ! $( '#_goldmate_discounts_enabled' ).is( ':checked' ) ) {
-						$( '#_goldmate_discounts_enabled' ).prop( 'checked', true ).trigger( 'change' );
-					}
-				} );
-				syncGoldmateDiscountPanel();
-
-				// Hide manual regular/sale prices while automatic rate is on,
-				// and show/hide GoldMate tabs (WC only auto-handles virtual/downloadable).
-				function syncGoldmatePricingVisibility() {
-					var on = $( '#_goldmate_enabled' ).is( ':checked' );
-					$( '._regular_price_field, ._sale_price_field' ).closest( '.options_group' ).toggle( ! on );
-					$( '._regular_price_field, ._sale_price_field' ).toggle( ! on );
-					$( '.show_if_goldmate' ).each( function () {
-						var \$el = $( this );
-						if ( \$el.is( 'li' ) ) {
-							\$el.toggle( on );
-						}
-					} );
-				}
-				$( document.body ).on( 'change', '#_goldmate_enabled', syncGoldmatePricingVisibility );
-				$( document.body ).on( 'woocommerce-product-type-change', syncGoldmatePricingVisibility );
-				$( '#woocommerce-product-data' ).on( 'woocommerce_variations_loaded', syncGoldmatePricingVisibility );
-				syncGoldmatePricingVisibility();
-			} );
-			"
+		printf(
+			'<details class="goldmate-section" data-section="%s"%s><summary><span class="goldmate-section-title">%s</span><span class="goldmate-section-summary"></span></summary><div class="goldmate-section-body">',
+			esc_attr( $key ),
+			$open ? ' open' : '',
+			esc_html( $title )
 		);
+	}
+
+	/**
+	 * Closes a section opened by open_section().
+	 */
+	protected static function close_section() {
+		echo '</div></details>';
 	}
 
 	/**
@@ -202,17 +179,23 @@ class Goldmate_Product_Fields {
 
 		global $post;
 
-		$post_id   = $post ? (int) $post->ID : 0;
-		$wage_mode = get_post_meta( $post_id, '_goldmate_wage_mode', true );
-		if ( '' === trim( (string) $wage_mode ) ) {
-			$wage_mode = goldmate_option( 'goldmate_default_wage_mode' );
-		}
-		$wage_mode = Goldmate_Calculator::normalize_wage_mode( $wage_mode );
+		$post_id = $post ? (int) $post->ID : 0;
+		$enabled = 'yes' === get_post_meta( $post_id, '_goldmate_enabled', true );
 
 		$karat = get_post_meta( $post_id, '_goldmate_karat', true );
 		if ( '' === trim( (string) $karat ) ) {
 			$karat = '18';
 		}
+
+		// Show only the wage fields the saved mode uses: a value left in the other
+		// field would otherwise turn the product into a combined wage on save.
+		$wage_mode = get_post_meta( $post_id, '_goldmate_wage_mode', true );
+		if ( '' === trim( (string) $wage_mode ) ) {
+			$wage_mode = goldmate_option( 'goldmate_default_wage_mode' );
+		}
+		$wage_mode  = Goldmate_Calculator::normalize_wage_mode( $wage_mode );
+		$wage_pct   = 'fixed' === $wage_mode ? '' : get_post_meta( $post_id, '_goldmate_wage_pct', true );
+		$wage_fixed = 'pct' === $wage_mode ? '' : get_post_meta( $post_id, '_goldmate_wage_fixed', true );
 
 		$stone   = get_post_meta( $post_id, '_goldmate_stone', true );
 		$leather = get_post_meta( $post_id, '_goldmate_leather', true );
@@ -222,111 +205,136 @@ class Goldmate_Product_Fields {
 			$stone = $legacy_acc;
 		}
 
-		$profit = get_post_meta( $post_id, '_goldmate_profit_pct', true );
-		$tax_ex = get_post_meta( $post_id, '_goldmate_tax_exempt', true );
+		$profit      = get_post_meta( $post_id, '_goldmate_profit_pct', true );
+		$shop_profit = goldmate_shop_percentages( $post_id )['profit_pct'];
+		$tax_exempt  = 'yes' === get_post_meta( $post_id, '_goldmate_tax_exempt', true );
 
-		$formula         = get_post_meta( $post_id, '_goldmate_formula', true );
-		$formula_choices = class_exists( 'Goldmate_Formulas' )
-			? array_merge( array( '' => '— پیش‌فرض فروشگاه —' ), Goldmate_Formulas::choices( true ) )
-			: array();
+		$formula         = (string) get_post_meta( $post_id, '_goldmate_formula', true );
+		$formula_choices = class_exists( 'Goldmate_Formulas' ) ? Goldmate_Formulas::choices( true ) : array();
+
+		// Only discounts that actually apply are shown; a switched-off row's
+		// leftover amount would otherwise switch on when the product is saved.
+		$discounts = Goldmate_Discounts::get( $post_id );
+		$disc_rows = array();
+		$disc_open = false;
+		foreach ( Goldmate_Discounts::targets() as $key => $def ) {
+			$row    = $discounts['items'][ $key ];
+			$active = $discounts['enabled'] && ! empty( $row['enabled'] ) && $row['amount'] > 0;
+
+			$disc_rows[ $key ] = array(
+				'label'  => $def['label'],
+				'type'   => $row['type'],
+				'amount' => $active ? $row['amount'] : '',
+			);
+			$disc_open = $disc_open || $active;
+		}
+
+		$components = class_exists( 'Goldmate_Components' ) ? Goldmate_Components::all() : array();
+		$comp_vals  = class_exists( 'Goldmate_Components' ) ? Goldmate_Components::product_values( $post_id ) : array();
+
+		$custom_components = false;
+		foreach ( $components as $comp ) {
+			if ( array_key_exists( $comp['id'], $comp_vals ) && (float) $comp_vals[ $comp['id'] ] !== (float) $comp['default'] ) {
+				$custom_components = true;
+			}
+		}
+
+		$advanced_open = '' !== trim( (string) $profit )
+			|| $tax_exempt
+			|| $custom_components
+			|| ( '' !== $formula && count( $formula_choices ) > 1 );
+
+		$has_accessories = class_exists( 'Goldmate_Accessories' ) && Goldmate_Accessories::get_groups( $post_id );
 		?>
 		<div id="goldmate_product_data" class="panel woocommerce_options_panel hidden">
-			<div class="options_group">
-				<p style="margin:12px 12px 0;font-weight:600;">تنظیمات نرخ خودکار طلا</p>
-				<p class="form-field show_if_simple" style="padding-left:12px !important;">
-					<span class="description">وزن و اجرت را اینجا وارد کنید؛ قیمت نهایی بر اساس فرمول انتخاب‌شده محاسبه می‌شود.</span>
-				</p>
-				<p class="form-field show_if_variable" style="padding-left:12px !important;">
-					<span class="description">عیار، اجرت، سنگ و سود را اینجا یک‌بار برای همه‌ی متغیرها وارد کنید. وزن را برای هر متغیر جداگانه در تب «متغیرها» وارد کنید. اگر یک متغیر عیار، اجرت یا سنگ متفاوتی دارد، همان‌جا روی آن متغیر وارد کنید.</span>
-				</p>
+
+			<div class="options_group goldmate-switch">
+				<?php
+				woocommerce_wp_checkbox(
+					array(
+						'id'          => '_goldmate_enabled',
+						'label'       => 'قیمت از نرخ روز طلا',
+						'value'       => $enabled ? 'yes' : 'no',
+						'cbvalue'     => 'yes',
+						'description' => 'قیمت این محصول از روی وزن، عیار، اجرت و قیمت روز طلا محاسبه شود.',
+					)
+				);
+				?>
 			</div>
 
-			<div class="options_group goldmate-panel-grid">
-				<?php
-				if ( ! empty( $formula_choices ) ) {
-					woocommerce_wp_select(
+			<div class="goldmate-when-on">
+
+				<?php Goldmate_Product_Preview::render_box(); ?>
+
+				<div class="options_group goldmate-panel-grid">
+					<?php
+					woocommerce_wp_text_input(
 						array(
-							'id'          => '_goldmate_formula',
-							'label'       => 'فرمول قیمت',
-							'options'     => $formula_choices,
-							'value'       => (string) $formula,
-							'desc_tip'    => true,
-							'description' => 'فرمول مشخص می‌کند کدام آیتم نرخ استفاده شود. خالی = فرمول پیش‌فرض فروشگاه.',
+							'id'                => '_goldmate_weight',
+							'label'             => 'وزن (گرم)',
+							'type'              => 'number',
+							// Variable products take a weight per variation.
+							'wrapper_class'     => 'show_if_simple',
+							'custom_attributes' => array(
+								'step' => '0.001',
+								'min'  => '0',
+							),
+							'desc_tip'          => true,
+							'description'       => 'وزن خالص طلا بدون سنگ و چرم.',
 						)
 					);
-				}
 
-				woocommerce_wp_text_input(
-					array(
-						'id'                => '_goldmate_weight',
-						'label'             => 'وزن (گرم)',
-						'type'              => 'number',
-						// Variable products take a weight per variation from the table below.
-						'wrapper_class'     => 'show_if_simple',
-						'custom_attributes' => array(
-							'step' => '0.001',
-							'min'  => '0',
-						),
-						'desc_tip'          => true,
-						'description'       => 'وزن خالص طلا بدون سنگ و چرم.',
-					)
-				);
+					woocommerce_wp_select(
+						array(
+							'id'          => '_goldmate_karat',
+							'label'       => 'عیار',
+							'options'     => self::karat_options(),
+							'value'       => (string) $karat,
+							'desc_tip'    => true,
+							'description' => 'برای آیتم مرجع ۱۸ عیار، نرخ به‌صورت خطی با عیار مقیاس می‌شود.',
+						)
+					);
 
-				woocommerce_wp_select(
-					array(
-						'id'          => '_goldmate_karat',
-						'label'       => 'نوع آیتم / عیار',
-						'options'     => self::karat_options(),
-						'value'       => (string) $karat,
-						'desc_tip'    => true,
-						'description' => 'برای آیتم مرجع ۱۸ عیار، نرخ به‌صورت خطی با عیار مقیاس می‌شود.',
-					)
-				);
+					woocommerce_wp_text_input(
+						array(
+							'id'                => '_goldmate_wage_pct',
+							'label'             => 'اجرت (٪)',
+							'type'              => 'number',
+							'value'             => $wage_pct,
+							'custom_attributes' => array(
+								'step' => '0.01',
+								'min'  => '0',
+							),
+							'desc_tip'          => true,
+							'description'       => 'درصد از مبلغ طلا. اگر اجرت ثابت هم وارد شود، هر دو جمع می‌شوند.',
+						)
+					);
 
-				woocommerce_wp_select(
-					array(
-						'id'          => '_goldmate_wage_mode',
-						'label'       => 'نوع محاسبه اجرت ساخت',
-						'options'     => array(
-							'pct'      => 'درصدی از مبلغ طلا',
-							'fixed'    => 'رقم ثابت به ازای هر گرم',
-							'combined' => 'ترکیبی (ثابت + درصد)',
-						),
-						'value'       => $wage_mode,
-						'desc_tip'    => true,
-						'description' => 'ترکیبی: اجرت = (وزن × ثابت) + (مبلغ طلا × درصد).',
-					)
-				);
+					woocommerce_wp_text_input(
+						array(
+							'id'                => '_goldmate_wage_fixed',
+							'label'             => 'اجرت ثابت (تومان/گرم)',
+							'type'              => 'number',
+							'value'             => $wage_fixed,
+							'custom_attributes' => array(
+								'step' => '1',
+								'min'  => '0',
+							),
+							'desc_tip'          => true,
+							'description'       => 'تومان به ازای هر گرم. اگر درصد اجرت هم وارد شود، هر دو جمع می‌شوند.',
+						)
+					);
+					?>
+				</div>
 
-				woocommerce_wp_text_input(
-					array(
-						'id'                => '_goldmate_wage_fixed',
-						'label'             => 'اجرت ساخت (رقم ثابت)',
-						'type'              => 'number',
-						'wrapper_class'     => '_goldmate_wage_fixed_field',
-						'custom_attributes' => array(
-							'step' => '1',
-							'min'  => '0',
-						),
-						'desc_tip'          => true,
-						'description'       => 'تومان به ازای هر گرم.',
-					)
-				);
+				<div class="show_if_variable goldmate-variations">
+					<p class="goldmate-hint description">مقادیر بالا برای همه‌ی متغیرها است. وزن هر متغیر و هر مقدار متفاوت را در جدول زیر وارد کنید.</p>
+					<?php Goldmate_Variation_Table::render( $post_id ); ?>
+				</div>
 
-				woocommerce_wp_text_input(
-					array(
-						'id'                => '_goldmate_wage_pct',
-						'label'             => 'اجرت ساخت (درصد)',
-						'type'              => 'number',
-						'wrapper_class'     => '_goldmate_wage_pct_field',
-						'custom_attributes' => array(
-							'step' => '0.01',
-							'min'  => '0',
-						),
-						'desc_tip'          => true,
-						'description'       => 'درصد نسبت به مبلغ طلا.',
-					)
-				);
+				<?php
+				self::open_section( 'extras', 'سنگ و چرم', goldmate_positive_float( $stone ) > 0 || goldmate_positive_float( $leather ) > 0 );
+				echo '<div class="options_group goldmate-panel-grid">';
 
 				woocommerce_wp_text_input(
 					array(
@@ -358,184 +366,151 @@ class Goldmate_Product_Fields {
 					)
 				);
 
-				woocommerce_wp_select(
-					array(
-						'id'          => '_goldmate_profit_mode',
-						'label'       => 'نوع محاسبه سود',
-						'options'     => array(
-							'shop' => 'پیش‌فرض فروشگاه',
-							'pct'  => 'درصد اختصاصی این محصول',
-						),
-						'value'       => ( '' !== trim( (string) $profit ) ) ? 'pct' : 'shop',
-						'desc_tip'    => true,
-						'description' => 'اگر «پیش‌فرض فروشگاه» باشد، درصد سود از تنظیمات گلدمیت خوانده می‌شود.',
-					)
-				);
+				echo '</div>';
+				self::close_section();
 
-				woocommerce_wp_text_input(
-					array(
-						'id'                => '_goldmate_profit_pct',
-						'label'             => 'سود (٪)',
-						'type'              => 'number',
-						'value'             => ( '' !== trim( (string) $profit ) ) ? $profit : goldmate_shop_percentages( $post_id )['profit_pct'],
-						'custom_attributes' => array(
-							'step' => '0.01',
-							'min'  => '0',
-						),
-						'desc_tip'          => true,
-						'description'       => 'فقط وقتی نوع سود «اختصاصی» است ذخیره می‌شود.',
-					)
-				);
-				?>
-			</div>
+				self::open_section( 'discount', 'تخفیف', $disc_open );
+				echo '<div class="options_group goldmate-panel-grid">';
 
-			<div class="options_group">
-				<?php
-				woocommerce_wp_checkbox(
-					array(
-						'id'          => '_goldmate_tax_exempt',
-						'label'       => 'معاف از مالیات؟',
-						'value'       => $tax_ex ? $tax_ex : 'no',
-						'cbvalue'     => 'yes',
-						'description' => 'مالیات و عوارض به قیمت این محصول اضافه نشود.',
-					)
-				);
-				?>
-			</div>
-
-			<?php
-			$components = class_exists( 'Goldmate_Components' ) ? Goldmate_Components::all() : array();
-			$comp_vals  = class_exists( 'Goldmate_Components' ) ? Goldmate_Components::product_values( $post_id ) : array();
-			if ( ! empty( $components ) ) :
-				?>
-			<div class="options_group">
-				<p style="margin:12px 12px 0;font-weight:600;">اجزای قیمت سفارشی</p>
-				<p class="form-field" style="padding-left:12px !important;">
-					<span class="description">مقادیر تعریف‌شده در تب «اجزای قیمت» افزونه. خالی = مقدار پیش‌فرض فروشگاه.</span>
-				</p>
-				<div class="goldmate-panel-grid">
-					<?php foreach ( $components as $comp ) : ?>
-						<?php if ( 'yes' !== $comp['enabled'] ) { continue; } ?>
-						<?php
-						$modes = Goldmate_Components::calc_modes();
-						$hint  = isset( $modes[ $comp['calc'] ] ) ? $modes[ $comp['calc'] ] : $comp['calc'];
-						$val   = array_key_exists( $comp['id'], $comp_vals ) ? $comp_vals[ $comp['id'] ] : $comp['default'];
-						woocommerce_wp_text_input(
-							array(
-								'id'                => '_goldmate_comp_' . $comp['id'],
-								'name'              => '_goldmate_component_values[' . $comp['id'] . ']',
-								'label'             => $comp['label'],
-								'type'              => 'number',
-								'value'             => $val,
-								'custom_attributes' => array(
-									'step' => '0.01',
-									'min'  => '0',
-								),
-								'desc_tip'          => true,
-								'description'       => $hint . ( $comp['default'] > 0 ? ' — پیش‌فرض: ' . $comp['default'] : '' ),
-							)
-						);
-						?>
-					<?php endforeach; ?>
-				</div>
-			</div>
-			<?php endif; ?>
-		</div>
-		<?php
-	}
-
-	/**
-	 * Renders the product تخفیف tab.
-	 */
-	public static function render_discount_panel() {
-
-		global $post;
-		$post_id   = $post ? (int) $post->ID : 0;
-		$discounts = Goldmate_Discounts::get( $post_id );
-		?>
-		<div id="goldmate_discount_data" class="panel woocommerce_options_panel hidden show_if_simple show_if_variable show_if_goldmate">
-			<div class="options_group">
-				<?php
-				woocommerce_wp_checkbox(
-					array(
-						'id'            => '_goldmate_discounts_enabled',
-						'label'         => 'فعال کردن تخفیف‌ها',
-						'value'         => $discounts['enabled'] ? 'yes' : 'no',
-						'cbvalue'       => 'yes',
-						'desc_tip'      => true,
-						'description'   => 'تخفیف‌های زیر فقط وقتی این گزینه روشن باشد اعمال می‌شوند و بر تخفیف دسته/سراسری اولویت دارند.',
-					)
-				);
 				woocommerce_wp_text_input(
 					array(
 						'id'          => '_goldmate_discounts_from',
-						'label'       => 'فعال از تاریخ',
+						'label'       => 'از تاریخ',
 						'type'        => 'date',
 						'value'       => isset( $discounts['date_from'] ) ? $discounts['date_from'] : '',
 						'desc_tip'    => true,
 						'description' => 'خالی = بدون محدودیت شروع',
 					)
 				);
+
 				woocommerce_wp_text_input(
 					array(
 						'id'          => '_goldmate_discounts_to',
-						'label'       => 'فعال تا تاریخ',
+						'label'       => 'تا تاریخ',
 						'type'        => 'date',
 						'value'       => isset( $discounts['date_to'] ) ? $discounts['date_to'] : '',
 						'desc_tip'    => true,
 						'description' => 'خالی = بدون محدودیت پایان',
 					)
 				);
+
+				echo '</div>';
+				?>
+				<table class="goldmate-discount-table">
+					<thead>
+						<tr>
+							<th>تخفیف روی</th>
+							<th>نوع</th>
+							<th>مقدار</th>
+						</tr>
+					</thead>
+					<tbody>
+						<?php foreach ( $disc_rows as $key => $row ) : ?>
+							<tr>
+								<td><?php echo esc_html( $row['label'] ); ?></td>
+								<td>
+									<select name="_goldmate_discounts[<?php echo esc_attr( $key ); ?>][type]">
+										<option value="pct" <?php selected( $row['type'], 'pct' ); ?>>درصدی</option>
+										<option value="fixed" <?php selected( $row['type'], 'fixed' ); ?>>ثابت (تومان)</option>
+									</select>
+								</td>
+								<td>
+									<input type="number"
+										name="_goldmate_discounts[<?php echo esc_attr( $key ); ?>][amount]"
+										value="<?php echo esc_attr( $row['amount'] ); ?>"
+										min="0"
+										step="0.01"
+									>
+								</td>
+							</tr>
+						<?php endforeach; ?>
+					</tbody>
+				</table>
+				<p class="goldmate-hint description">هر ردیفی که مقدار داشته باشد فعال است؛ برای خاموش کردن، مقدار را خالی کنید. تخفیف محصول بر تخفیف دسته و سراسری اولویت دارد.</p>
+				<?php
+				self::close_section();
+
+				self::open_section( 'advanced', 'پیشرفته', $advanced_open );
+				echo '<div class="options_group goldmate-panel-grid">';
+
+				// With a single active formula there is nothing to choose.
+				if ( count( $formula_choices ) > 1 ) {
+					woocommerce_wp_select(
+						array(
+							'id'          => '_goldmate_formula',
+							'label'       => 'فرمول قیمت',
+							'options'     => array_merge( array( '' => '— پیش‌فرض فروشگاه —' ), $formula_choices ),
+							'value'       => $formula,
+							'desc_tip'    => true,
+							'description' => 'فرمول مشخص می‌کند کدام آیتم نرخ استفاده شود.',
+						)
+					);
+				}
+
+				woocommerce_wp_text_input(
+					array(
+						'id'                => '_goldmate_profit_pct',
+						'label'             => 'سود (٪)',
+						'type'              => 'number',
+						'value'             => $profit,
+						'placeholder'       => 'پیش‌فرض فروشگاه: ' . wc_format_localized_decimal( $shop_profit ),
+						'custom_attributes' => array(
+							'step' => '0.01',
+							'min'  => '0',
+						),
+						'desc_tip'          => true,
+						'description'       => 'خالی = درصد سود پیش‌فرض فروشگاه.',
+					)
+				);
+
+				woocommerce_wp_checkbox(
+					array(
+						'id'          => '_goldmate_tax_exempt',
+						'label'       => 'معاف از مالیات',
+						'value'       => $tax_exempt ? 'yes' : 'no',
+						'cbvalue'     => 'yes',
+						'description' => 'مالیات و عوارض به قیمت این محصول اضافه نشود.',
+					)
+				);
+
+				foreach ( $components as $comp ) {
+					if ( 'yes' !== $comp['enabled'] ) {
+						continue;
+					}
+
+					$modes = Goldmate_Components::calc_modes();
+					$hint  = isset( $modes[ $comp['calc'] ] ) ? $modes[ $comp['calc'] ] : $comp['calc'];
+
+					woocommerce_wp_text_input(
+						array(
+							'id'                => '_goldmate_comp_' . $comp['id'],
+							'name'              => '_goldmate_component_values[' . $comp['id'] . ']',
+							'label'             => $comp['label'],
+							'type'              => 'number',
+							'value'             => array_key_exists( $comp['id'], $comp_vals ) ? $comp_vals[ $comp['id'] ] : $comp['default'],
+							'custom_attributes' => array(
+								'step' => '0.01',
+								'min'  => '0',
+							),
+							'desc_tip'          => true,
+							'description'       => $hint . ( $comp['default'] > 0 ? ' — پیش‌فرض: ' . $comp['default'] : '' ),
+						)
+					);
+				}
+
+				echo '</div>';
+				self::close_section();
 				?>
 			</div>
 
-			<table class="goldmate-discount-table">
-				<thead>
-					<tr>
-						<th style="width:34%;">تخفیف روی</th>
-						<th style="width:14%;">فعال باشد؟</th>
-						<th style="width:22%;">نوع تخفیف</th>
-						<th style="width:30%;">مقدار تخفیف</th>
-					</tr>
-				</thead>
-				<tbody>
-					<?php foreach ( Goldmate_Discounts::targets() as $key => $def ) : ?>
-						<?php $row = $discounts['items'][ $key ]; ?>
-						<tr>
-							<td><?php echo esc_html( $def['label'] ); ?></td>
-							<td>
-								<label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;">
-									<input type="checkbox"
-										class="checkbox"
-										id="_goldmate_discount_<?php echo esc_attr( $key ); ?>_enabled"
-										name="_goldmate_discounts[<?php echo esc_attr( $key ); ?>][enabled]"
-										value="yes"
-										<?php checked( ! empty( $row['enabled'] ) ); ?>
-									>
-									<span>فعال</span>
-								</label>
-							</td>
-							<td>
-								<select name="_goldmate_discounts[<?php echo esc_attr( $key ); ?>][type]">
-									<option value="pct" <?php selected( $row['type'], 'pct' ); ?>>درصدی</option>
-									<option value="fixed" <?php selected( $row['type'], 'fixed' ); ?>>ثابت</option>
-								</select>
-							</td>
-							<td>
-								<input type="number"
-									name="_goldmate_discounts[<?php echo esc_attr( $key ); ?>][amount]"
-									value="<?php echo esc_attr( $row['amount'] ); ?>"
-									min="0"
-									step="0.01"
-								>
-							</td>
-						</tr>
-					<?php endforeach; ?>
-				</tbody>
-			</table>
-			<p class="form-field" style="padding:0 12px 16px !important;">
-				<span class="description">برای نوع ثابت، مقدار به تومان است. برای درصدی، عدد درصد را وارد کنید (مثلاً ۲ یعنی ۲٪).</span>
-			</p>
+			<?php
+			// Accessory groups work whether or not the price is automatic.
+			if ( class_exists( 'Goldmate_Accessories' ) ) {
+				self::open_section( 'accessories', 'متعلقات قابل انتخاب (زنجیر، جعبه، …)', (bool) $has_accessories );
+				Goldmate_Accessories::render_admin_panel();
+				self::close_section();
+			}
+			?>
 		</div>
 		<?php
 	}
@@ -558,10 +533,7 @@ class Goldmate_Product_Fields {
 	}
 
 	/**
-	 * Saves product-level gold fields from the dedicated tab + type option.
-	 *
-	 * WooCommerce already persists `_goldmate_enabled` from the type-option
-	 * checkbox when the id matches; we still normalise it here for safety.
+	 * Saves product-level gold fields from the "نرخ خودکار" tab.
 	 *
 	 * @param WC_Product $product Product being saved.
 	 */
@@ -571,16 +543,20 @@ class Goldmate_Product_Fields {
 			return;
 		}
 
-		$enabled = isset( $_POST['_goldmate_enabled'] ) ? 'yes' : 'no'; // phpcs:ignore WordPress.Security.NonceVerification.Missing -- WC verifies.
+		// phpcs:disable WordPress.Security.NonceVerification.Missing -- WC verifies before this hook.
+
+		$enabled = isset( $_POST['_goldmate_enabled'] ) ? 'yes' : 'no';
 		$product->update_meta_data( '_goldmate_enabled', $enabled );
 
-		if ( isset( $_POST['_goldmate_wage_mode'] ) ) {
-			$product->update_meta_data(
-				'_goldmate_wage_mode',
-				Goldmate_Calculator::normalize_wage_mode(
-					sanitize_text_field( wp_unslash( $_POST['_goldmate_wage_mode'] ) )
-				)
+		if ( isset( $_POST['_goldmate_wage_pct'] ) || isset( $_POST['_goldmate_wage_fixed'] ) ) {
+			$mode = self::derive_wage_mode(
+				isset( $_POST['_goldmate_wage_pct'] ) ? wc_clean( wp_unslash( $_POST['_goldmate_wage_pct'] ) ) : '',
+				isset( $_POST['_goldmate_wage_fixed'] ) ? wc_clean( wp_unslash( $_POST['_goldmate_wage_fixed'] ) ) : '',
+				(string) $product->get_meta( '_goldmate_wage_mode', true )
 			);
+			if ( '' !== $mode ) {
+				$product->update_meta_data( '_goldmate_wage_mode', Goldmate_Calculator::normalize_wage_mode( $mode ) );
+			}
 		}
 
 		if ( isset( $_POST['_goldmate_formula'] ) ) {
@@ -621,17 +597,10 @@ class Goldmate_Product_Fields {
 		$leather = goldmate_positive_float( $product->get_meta( '_goldmate_leather', true ) );
 		$product->update_meta_data( '_goldmate_accessories', $stone + $leather );
 
-		$profit_mode = isset( $_POST['_goldmate_profit_mode'] )
-			? sanitize_text_field( wp_unslash( $_POST['_goldmate_profit_mode'] ) )
-			: 'shop';
-
-		if ( 'pct' === $profit_mode && isset( $_POST['_goldmate_profit_pct'] ) ) {
-			$product->update_meta_data(
-				'_goldmate_profit_pct',
-				goldmate_positive_float( wp_unslash( $_POST['_goldmate_profit_pct'] ) )
-			);
-		} else {
-			$product->update_meta_data( '_goldmate_profit_pct', '' );
+		// Empty profit means the shop default; "0" is a real 0% override.
+		if ( isset( $_POST['_goldmate_profit_pct'] ) ) {
+			$profit = trim( (string) wc_clean( wp_unslash( $_POST['_goldmate_profit_pct'] ) ) );
+			$product->update_meta_data( '_goldmate_profit_pct', '' === $profit ? '' : goldmate_positive_float( $profit ) );
 		}
 
 		$product->update_meta_data(
@@ -639,25 +608,11 @@ class Goldmate_Product_Fields {
 			isset( $_POST['_goldmate_tax_exempt'] ) ? 'yes' : 'no'
 		);
 
-		$product->update_meta_data(
-			'_goldmate_discounts_enabled',
-			isset( $_POST['_goldmate_discounts_enabled'] ) ? 'yes' : 'no'
-		);
-
-		$discount_rows = array();
-		$posted_disc   = isset( $_POST['_goldmate_discounts'] ) && is_array( $_POST['_goldmate_discounts'] )
-			? wp_unslash( $_POST['_goldmate_discounts'] ) // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
-			: array();
-
-		foreach ( Goldmate_Discounts::targets() as $key => $def ) {
-			$row = isset( $posted_disc[ $key ] ) && is_array( $posted_disc[ $key ] ) ? $posted_disc[ $key ] : array();
-			$discount_rows[ $key ] = array(
-				'enabled' => ( ! empty( $row['enabled'] ) && 'yes' === $row['enabled'] ) ? 'yes' : 'no',
-				'type'    => ( isset( $row['type'] ) && 'pct' === $row['type'] ) ? 'pct' : 'fixed',
-				'amount'  => goldmate_positive_float( isset( $row['amount'] ) ? $row['amount'] : 0 ),
-			);
+		if ( isset( $_POST['_goldmate_discounts'] ) ) {
+			$discounts = self::discount_rows_from_post( wp_unslash( $_POST['_goldmate_discounts'] ) ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- sanitised per row.
+			$product->update_meta_data( '_goldmate_discounts_enabled', $discounts['enabled'] ? 'yes' : 'no' );
+			$product->update_meta_data( '_goldmate_discounts', $discounts['items'] );
 		}
-		$product->update_meta_data( '_goldmate_discounts', $discount_rows );
 
 		$product->update_meta_data(
 			'_goldmate_discounts_from',
@@ -679,142 +634,11 @@ class Goldmate_Product_Fields {
 			}
 		}
 		$product->update_meta_data( '_goldmate_component_values', $comp_vals );
-	}
 
-	/**
-	 * Renders the per-variation overrides.
-	 *
-	 * @param int     $loop           Variation index in the form.
-	 * @param array   $variation_data Legacy variation data.
-	 * @param WP_Post $variation      Variation post.
-	 */
-	public static function render_variation_fields( $loop, $variation_data, $variation ) {
+		// After the parent's own values, which variations inherit from.
+		Goldmate_Variation_Table::save( $product );
 
-		$parent_id = $variation->post_parent;
-		$enabled   = 'yes' === get_post_meta( $parent_id, '_goldmate_enabled', true );
-
-		echo '<div class="goldmate-variation-fields show_if_goldmate" style="clear:both;padding-top:6px;">';
-
-		printf(
-			'<p style="margin:0 0 6px;font-weight:600;">نرخ خودکار%s</p>',
-			$enabled ? '' : ' <span style="font-weight:400;color:#b32d2e;">(در محصول اصلی غیرفعال است — تیک «نرخ خودکار» را بزنید)</span>'
-		);
-
-		woocommerce_wp_checkbox(
-			array(
-				'id'            => "_goldmate_excluded{$loop}",
-				'name'          => "_goldmate_excluded[{$loop}]",
-				'value'         => get_post_meta( $variation->ID, '_goldmate_excluded', true ),
-				'label'         => 'این متغیر محاسبه نشود',
-				'description'   => 'قیمت این متغیر دستی می‌ماند.',
-				'wrapper_class' => 'form-row form-row-full',
-			)
-		);
-
-		$parent_mode = get_post_meta( $parent_id, '_goldmate_wage_mode', true );
-		if ( '' === trim( (string) $parent_mode ) ) {
-			$parent_mode = goldmate_option( 'goldmate_default_wage_mode' );
-		}
-		$own_mode = get_post_meta( $variation->ID, '_goldmate_wage_mode', true );
-
-		woocommerce_wp_select(
-			array(
-				'id'            => "_goldmate_wage_mode{$loop}",
-				'name'          => "_goldmate_wage_mode[{$loop}]",
-				'value'         => $own_mode,
-				'label'         => 'نوع اجرت',
-				'options'       => array(
-					''         => 'ارثی از محصول اصلی',
-					'pct'      => 'درصدی از مبلغ طلا',
-					'fixed'    => 'رقم ثابت به ازای هر گرم',
-					'combined' => 'ترکیبی (ثابت + درصد)',
-				),
-				'wrapper_class' => 'form-row form-row-full',
-				'description'   => 'خالی بگذارید تا از محصول اصلی به ارث برسد.',
-				'desc_tip'      => true,
-			)
-		);
-
-		$fields = array(
-			'_goldmate_weight'     => array( 'وزن (گرم)', '0.001', 'form-row form-row-first' ),
-			'_goldmate_karat'      => array( 'عیار', '0.1', 'form-row form-row-last' ),
-			'_goldmate_wage_pct'   => array( 'اجرت (٪)', '0.01', 'form-row form-row-first' ),
-			'_goldmate_wage_fixed' => array( 'اجرت ثابت (تومان/گرم)', '1', 'form-row form-row-last' ),
-			'_goldmate_stone'      => array( 'قیمت سنگ', '1', 'form-row form-row-first' ),
-			'_goldmate_leather'    => array( 'قیمت چرم', '1', 'form-row form-row-last' ),
-		);
-
-		foreach ( $fields as $key => $field ) {
-
-			list( $label, $step, $wrapper ) = $field;
-
-			$inherited = get_post_meta( $parent_id, $key, true );
-
-			woocommerce_wp_text_input(
-				array(
-					'id'                => "{$key}{$loop}",
-					'name'              => "{$key}[{$loop}]",
-					'value'             => get_post_meta( $variation->ID, $key, true ),
-					'label'             => $label,
-					'type'              => 'number',
-					'placeholder'       => '' !== trim( (string) $inherited ) ? $inherited : 'ارثی از محصول اصلی',
-					'custom_attributes' => array(
-						'step' => $step,
-						'min'  => '0',
-					),
-					'wrapper_class'     => $wrapper,
-					'description'       => 'خالی بگذارید تا از محصول اصلی به ارث برسد.',
-					'desc_tip'          => true,
-				)
-			);
-		}
-
-		echo '</div>';
-	}
-
-	/**
-	 * Saves the per-variation overrides.
-	 *
-	 * @param int $variation_id Variation ID.
-	 * @param int $loop         Variation index in the form.
-	 */
-	public static function save_variation_fields( $variation_id, $loop ) {
-
-		$excluded = isset( $_POST['_goldmate_excluded'][ $loop ] ) ? 'yes' : 'no'; // phpcs:ignore WordPress.Security.NonceVerification.Missing
-		update_post_meta( $variation_id, '_goldmate_excluded', $excluded );
-
-		if ( isset( $_POST['_goldmate_wage_mode'][ $loop ] ) ) {
-			$raw_mode = sanitize_text_field( wp_unslash( $_POST['_goldmate_wage_mode'][ $loop ] ) );
-			if ( '' === $raw_mode ) {
-				delete_post_meta( $variation_id, '_goldmate_wage_mode' );
-			} else {
-				update_post_meta( $variation_id, '_goldmate_wage_mode', Goldmate_Calculator::normalize_wage_mode( $raw_mode ) );
-			}
-		}
-
-		$keys = array( '_goldmate_weight', '_goldmate_karat', '_goldmate_wage_pct', '_goldmate_wage_fixed', '_goldmate_stone', '_goldmate_leather' );
-
-		foreach ( $keys as $key ) {
-
-			if ( ! isset( $_POST[ $key ][ $loop ] ) ) {
-				continue;
-			}
-
-			$raw = wc_clean( wp_unslash( $_POST[ $key ][ $loop ] ) );
-
-			if ( '' === trim( (string) $raw ) ) {
-				delete_post_meta( $variation_id, $key );
-				continue;
-			}
-
-			update_post_meta( $variation_id, $key, goldmate_positive_float( $raw ) );
-		}
-
-		$stone   = goldmate_meta_float( $variation_id, '_goldmate_stone' );
-		$leather = goldmate_meta_float( $variation_id, '_goldmate_leather' );
-		if ( $stone > 0 || $leather > 0 || metadata_exists( 'post', $variation_id, '_goldmate_stone' ) || metadata_exists( 'post', $variation_id, '_goldmate_leather' ) ) {
-			update_post_meta( $variation_id, '_goldmate_accessories', $stone + $leather );
-		}
+		// phpcs:enable WordPress.Security.NonceVerification.Missing
 	}
 
 	/**

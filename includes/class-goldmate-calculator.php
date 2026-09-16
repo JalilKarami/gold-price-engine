@@ -30,13 +30,27 @@ class Goldmate_Calculator {
 			return false;
 		}
 
-		$formula = null;
-		$item    = null;
-
 		// Named formula → rate item. Empty product meta uses the default formula.
-		if ( class_exists( 'Goldmate_Formulas' ) ) {
-			$formula = Goldmate_Formulas::for_product( (int) $product_id );
-		}
+		$formula = class_exists( 'Goldmate_Formulas' ) ? Goldmate_Formulas::for_product( (int) $product_id ) : null;
+
+		return self::calculate_with_formula( $inputs, $formula, (int) $product_id );
+	}
+
+	/**
+	 * Prices already-resolved product inputs against a formula's rate item.
+	 *
+	 * Split out of calculate() so the product edit screen can preview a price
+	 * from unsaved form values while going through the exact same rate, profit
+	 * and tax resolution as a saved product.
+	 *
+	 * @param array      $inputs     Inputs shaped like resolve_inputs() returns.
+	 * @param array|null $formula    Formula row, or null for the default rate item.
+	 * @param int        $product_id Product or variation ID.
+	 * @return array|false
+	 */
+	public static function calculate_with_formula( $inputs, $formula, $product_id ) {
+
+		$item = null;
 
 		if ( $formula ) {
 			$inputs['formula_slug'] = $formula['slug'];
@@ -161,11 +175,12 @@ class Goldmate_Calculator {
 			}
 		}
 
+		// Explicit discounts (the edit-screen preview) outrank the stored ones.
 		$discounts = array( 'enabled' => false, 'items' => array() );
-		if ( $product_id > 0 && class_exists( 'Goldmate_Discounts' ) ) {
-			$discounts = Goldmate_Discounts::resolve( $product_id );
-		} elseif ( ! empty( $inputs['discounts'] ) && is_array( $inputs['discounts'] ) ) {
+		if ( ! empty( $inputs['discounts'] ) && is_array( $inputs['discounts'] ) ) {
 			$discounts = $inputs['discounts'];
+		} elseif ( $product_id > 0 && class_exists( 'Goldmate_Discounts' ) ) {
+			$discounts = Goldmate_Discounts::resolve( $product_id );
 		}
 
 		// Karat scales linearly against the 18-karat reference (750/1000 purity).

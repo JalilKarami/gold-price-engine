@@ -1,0 +1,207 @@
+/* "نرخ خودکار" product data tab. */
+
+#woocommerce-product-data ul.wc-tabs li.goldmate_options a::before {
+	content: "\f185";
+	font-family: dashicons;
+}
+
+#goldmate_product_data .goldmate-panel-grid {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 0 16px;
+}
+
+#goldmate_product_data .goldmate-panel-grid .form-field {
+	float: none;
+	width: auto;
+	margin: 0;
+	/* Label gutter on the label's side, whichever way the admin runs. */
+	padding: 5px 0 !important;
+	padding-inline-start: 162px !important;
+}
+
+#goldmate_product_data .goldmate-panel-grid .goldmate-hint {
+	grid-column: 1 / -1;
+}
+
+#goldmate_product_data .goldmate-switch label {
+	font-weight: 600;
+}
+
+/* Collapsible sections */
+
+#goldmate_product_data .goldmate-section {
+	border-top: 1px solid #eee;
+}
+
+#goldmate_product_data .goldmate-section > summary {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: 4px 12px;
+	padding: 12px;
+	cursor: pointer;
+	list-style: none;
+}
+
+#goldmate_product_data .goldmate-section > summary::-webkit-details-marker {
+	display: none;
+}
+
+#goldmate_product_data .goldmate-section > summary::before {
+	content: "\f139";
+	font-family: dashicons;
+	color: #787c82;
+	transition: transform 0.15s;
+}
+
+/* RTL admin: the closed arrow points left, toward the content flow. */
+.rtl #goldmate_product_data .goldmate-section > summary::before {
+	content: "\f141";
+}
+
+#goldmate_product_data .goldmate-section[open] > summary::before {
+	content: "\f140";
+}
+
+#goldmate_product_data .goldmate-section-title {
+	font-weight: 600;
+}
+
+#goldmate_product_data .goldmate-section-summary {
+	color: #646970;
+	font-size: 12px;
+}
+
+#goldmate_product_data .goldmate-section-body {
+	padding-bottom: 8px;
+}
+
+#goldmate_product_data .goldmate-section-body > .options_group {
+	border-top: 0;
+}
+
+/* Discount table */
+
+#goldmate_product_data .goldmate-discount-table {
+	width: calc(100% - 24px);
+	margin: 0 12px;
+	border-collapse: collapse;
+}
+
+#goldmate_product_data .goldmate-discount-table th,
+#goldmate_product_data .goldmate-discount-table td {
+	padding: 8px;
+	border-bottom: 1px solid #eee;
+	text-align: right;
+	vertical-align: middle;
+}
+
+#goldmate_product_data .goldmate-discount-table th {
+	background: #f6f7f7;
+	font-weight: 600;
+}
+
+#goldmate_product_data .goldmate-discount-table select,
+#goldmate_product_data .goldmate-discount-table input[type="number"] {
+	width: 100%;
+	max-width: 160px;
+}
+
+#goldmate_product_data p.goldmate-hint.description {
+	margin: 8px 12px;
+}
+
+@media (max-width: 900px) {
+	#goldmate_product_data .goldmate-panel-grid {
+		grid-template-columns: 1fr;
+	}
+}
+
+/* Variation table */
+
+#goldmate_product_data .goldmate-variations {
+	border-top: 1px solid #eee;
+	padding-bottom: 8px;
+}
+
+#goldmate_product_data .goldmate-var-table-wrap {
+	margin: 0 12px;
+	overflow-x: auto;
+}
+
+#goldmate_product_data .goldmate-var-table {
+	width: 100%;
+	border-collapse: collapse;
+}
+
+#goldmate_product_data .goldmate-var-table th,
+#goldmate_product_data .goldmate-var-table td {
+	padding: 6px 8px;
+	border-bottom: 1px solid #eee;
+	text-align: right;
+	vertical-align: middle;
+}
+
+#goldmate_product_data .goldmate-var-table th {
+	background: #f6f7f7;
+	font-weight: 600;
+	white-space: nowrap;
+}
+
+#goldmate_product_data .goldmate-var-table input[type="number"] {
+	width: 100%;
+	min-width: 80px;
+	max-width: 120px;
+}
+
+#goldmate_product_data .goldmate-var-table select {
+	min-width: 90px;
+}
+
+#goldmate_product_data .goldmate-var-table input[type="checkbox"] {
+	float: none;
+	margin: 0;
+}
+
+#goldmate_product_data .goldmate-var-price {
+	font-weight: 600;
+	white-space: nowrap;
+	transition: opacity 0.15s;
+}
+
+#goldmate_product_data .goldmate-var-table.is-calculating .goldmate-var-price {
+	opacity: 0.45;
+}
+
+#goldmate_product_data .goldmate-var-row.is-excluded td:not(:nth-child(5)) {
+	opacity: 0.5;
+}
+
+#goldmate_product_data .goldmate-var-more {
+	white-space: nowrap;
+}
+
+#goldmate_product_data .goldmate-var-extra td {
+	background: #fbfbfc;
+}
+
+#goldmate_product_data .goldmate-var-extra-grid {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px 16px;
+}
+
+#goldmate_product_data .goldmate-var-extra-grid label {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	margin: 0;
+	float: none;
+	width: auto;
+}
+
+#goldmate_product_data .goldmate-var-extra .description {
+	margin: 6px 0 0;
+	padding: 0;
+}

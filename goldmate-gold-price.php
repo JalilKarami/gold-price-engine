@@ -31,6 +31,8 @@ require_once GOLDMATE_PATH . 'includes/class-goldmate-calculator.php';
 require_once GOLDMATE_PATH . 'includes/class-goldmate-pricing.php';
 require_once GOLDMATE_PATH . 'includes/class-goldmate-batch.php';
 require_once GOLDMATE_PATH . 'includes/class-goldmate-product-fields.php';
+require_once GOLDMATE_PATH . 'includes/class-goldmate-product-preview.php';
+require_once GOLDMATE_PATH . 'includes/class-goldmate-variation-table.php';
 require_once GOLDMATE_PATH . 'includes/class-goldmate-display.php';
 require_once GOLDMATE_PATH . 'includes/class-goldmate-order.php';
 require_once GOLDMATE_PATH . 'includes/class-goldmate-accessories.php';
@@ -86,6 +88,8 @@ function goldmate_init() {
 	Goldmate_Batch::init();
 	Goldmate_Fetcher::init();
 	Goldmate_Product_Fields::init();
+	Goldmate_Product_Preview::init();
+	Goldmate_Variation_Table::init();
 	Goldmate_Display::init();
 	Goldmate_Order::init();
 	Goldmate_Accessories::init();
