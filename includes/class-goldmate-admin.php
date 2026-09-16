@@ -170,21 +170,6 @@ class Goldmate_Admin {
 			return;
 		}
 
-		if ( preg_match( '/^dup_rate_item_(\d+)$/', $action, $m ) ) {
-			Goldmate_Rate_Items::duplicate( (int) $m[1] );
-			self::notice( 'success', 'آیتم کپی شد.' );
-			return;
-		}
-
-		if ( preg_match( '/^del_rate_item_(\d+)$/', $action, $m ) ) {
-			if ( Goldmate_Rate_Items::delete( (int) $m[1] ) ) {
-				self::notice( 'success', 'آیتم حذف شد.' );
-			} else {
-				self::notice( 'error', 'حذف آیتم ممکن نیست.' );
-			}
-			return;
-		}
-
 		if ( preg_match( '/^set_default_formula_(\d+)$/', $action, $m ) ) {
 			if ( Goldmate_Formulas::set_default( (int) $m[1] ) ) {
 				self::notice( 'success', 'فرمول پیش‌فرض تنظیم شد.' );
@@ -210,10 +195,6 @@ class Goldmate_Admin {
 
 				foreach ( $warnings as $warning ) {
 					self::notice( 'warning', $warning );
-				}
-
-				if ( 'pricing' === $tab && isset( $_POST['goldmate_rate_per_gram'] ) ) {
-					self::save_rate( wp_unslash( $_POST['goldmate_rate_per_gram'] ) );
 				}
 
 				if ( 'shortcodes' === $tab ) {
@@ -267,16 +248,6 @@ class Goldmate_Admin {
 			self::notice( 'success', 'آیتم‌های نرخ ذخیره شد.' );
 			break;
 
-		case 'add_rate_item':
-			Goldmate_Rate_Items::insert(
-				array(
-					'slug'  => 'item-' . wp_generate_password( 6, false, false ),
-					'label' => 'آیتم جدید',
-				)
-			);
-			self::notice( 'success', 'آیتم جدید اضافه شد.' );
-			break;
-
 		case 'save_formulas':
 			Goldmate_Admin_Formulas::save_from_post( $_POST );
 			self::notice( 'success', 'فرمول‌ها ذخیره شد.' );
@@ -315,35 +286,6 @@ class Goldmate_Admin {
 	}
 
 	/**
-	 * Stores a manually entered rate through the rate writer.
-	 *
-	 * @param mixed $raw Submitted value.
-	 */
-	protected static function save_rate( $raw ) {
-
-		$rate    = goldmate_positive_float( $raw );
-		$current = goldmate_reference_rate();
-
-		if ( $rate <= 0 ) {
-			update_option( 'goldmate_rate_per_gram', 0 );
-			return;
-		}
-
-		if ( abs( $rate - $current ) < 0.0001 ) {
-			return;
-		}
-
-		$item = Goldmate_Rate_Items::get_by_slug( Goldmate_Rate_Items::DEFAULT_SLUG );
-		if ( $item ) {
-			Goldmate_Rate_Items::set_rate( (int) $item['id'], $rate, 'manual' );
-		} else {
-			update_option( 'goldmate_rate_per_gram', $rate );
-		}
-
-		self::notice( 'info', 'قیمت روز تغییر کرد؛ به‌روزرسانی قیمت محصولات در پس‌زمینه آغاز شد.' );
-	}
-
-	/**
 	 * Queues a notice for the current request.
 	 *
 	 * @param string $type success|error|warning|info.
@@ -369,8 +311,9 @@ class Goldmate_Admin {
 			return;
 		}
 
-		$tab  = self::current_tab();
-		$tabs = Goldmate_Settings::tabs();
+		$tab          = self::current_tab();
+		$tabs         = Goldmate_Settings::tabs();
+		$descriptions = Goldmate_Settings::tab_descriptions();
 		?>
 		<div class="wrap goldmate-wrap">
 			<h1>قیمت طلا</h1>
@@ -378,11 +321,22 @@ class Goldmate_Admin {
 			<nav class="nav-tab-wrapper" style="margin-bottom:16px;">
 				<?php foreach ( $tabs as $key => $label ) : ?>
 					<a href="<?php echo esc_url( self::url( $key ) ); ?>"
-					   class="nav-tab <?php echo $key === $tab ? 'nav-tab-active' : ''; ?>">
+					   class="nav-tab <?php echo $key === $tab ? 'nav-tab-active' : ''; ?>"
+					   <?php if ( ! empty( $descriptions[ $key ] ) ) : ?>title="<?php echo esc_attr( $descriptions[ $key ] ); ?>"<?php endif; ?>>
 						<?php echo esc_html( $label ); ?>
+						<?php if ( ! empty( $descriptions[ $key ] ) ) : ?>
+							<span class="dashicons dashicons-info-outline goldmate-tab-info" aria-hidden="true"></span>
+						<?php endif; ?>
 					</a>
 				<?php endforeach; ?>
 			</nav>
+
+			<?php if ( ! empty( $descriptions[ $tab ] ) ) : ?>
+				<div class="goldmate-tab-intro">
+					<span class="dashicons dashicons-info-outline" aria-hidden="true"></span>
+					<p><?php echo esc_html( $descriptions[ $tab ] ); ?></p>
+				</div>
+			<?php endif; ?>
 
 			<?php foreach ( self::$notices as $notice ) : ?>
 				<div class="notice notice-<?php echo esc_attr( $notice['type'] ); ?>">
@@ -536,6 +490,11 @@ class Goldmate_Admin {
 				<?php else : ?>
 					<?php echo esc_html( $field['title'] ); ?>
 				<?php endif; ?>
+				<?php if ( ! empty( $field['help'] ) ) : ?>
+					<span class="goldmate-help dashicons dashicons-info-outline" tabindex="0" role="img"
+						aria-label="<?php echo esc_attr( $field['help'] ); ?>"
+						data-tip="<?php echo esc_attr( $field['help'] ); ?>"></span>
+				<?php endif; ?>
 			</th>
 			<td>
 				<?php
@@ -652,6 +611,64 @@ class Goldmate_Admin {
 		<style>
 			.goldmate-wrap .form-table th { width: 260px; }
 			.goldmate-wrap .description { max-width: 640px; }
+			.goldmate-wrap .goldmate-tab-info {
+				font-size: 15px;
+				width: 15px;
+				height: 15px;
+				vertical-align: middle;
+				opacity: .55;
+			}
+			.goldmate-wrap .nav-tab-active .goldmate-tab-info { opacity: .9; }
+			.goldmate-wrap .goldmate-tab-intro {
+				display: flex;
+				gap: 10px;
+				align-items: flex-start;
+				max-width: 960px;
+				margin: 0 0 16px;
+				padding: 10px 14px;
+				background: #fff;
+				border: 1px solid #c3c4c7;
+				border-right: 4px solid #2271b1;
+			}
+			.goldmate-wrap .goldmate-tab-intro .dashicons { color: #2271b1; flex: 0 0 auto; margin-top: 2px; }
+			.goldmate-wrap .goldmate-tab-intro p { margin: 0; line-height: 1.8; }
+			.goldmate-wrap .goldmate-help {
+				position: relative;
+				font-size: 16px;
+				width: 16px;
+				height: 16px;
+				margin-inline-start: 4px;
+				vertical-align: middle;
+				color: #2271b1;
+				cursor: help;
+			}
+			.goldmate-wrap .goldmate-help:focus { outline: 2px solid #2271b1; outline-offset: 1px; border-radius: 50%; }
+			.goldmate-wrap .goldmate-help::after {
+				content: attr(data-tip);
+				position: absolute;
+				z-index: 100;
+				top: calc(100% + 6px);
+				inset-inline-start: -8px;
+				width: 320px;
+				max-width: 70vw;
+				padding: 8px 10px;
+				background: #1d2327;
+				color: #fff;
+				font-family: inherit;
+				font-size: 12px;
+				font-weight: 400;
+				line-height: 1.8;
+				white-space: normal;
+				text-align: start;
+				border-radius: 4px;
+				box-shadow: 0 4px 14px rgba(0, 0, 0, .2);
+				opacity: 0;
+				visibility: hidden;
+				pointer-events: none;
+				transition: opacity .12s ease;
+			}
+			.goldmate-wrap .goldmate-help:hover::after,
+			.goldmate-wrap .goldmate-help:focus::after { opacity: 1; visibility: visible; }
 		</style>
 		<?php
 	}

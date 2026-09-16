@@ -233,8 +233,11 @@ class Goldmate_Product_Fields {
 		<div id="goldmate_product_data" class="panel woocommerce_options_panel hidden">
 			<div class="options_group">
 				<p style="margin:12px 12px 0;font-weight:600;">تنظیمات نرخ خودکار طلا</p>
-				<p class="form-field" style="padding-left:12px !important;">
+				<p class="form-field show_if_simple" style="padding-left:12px !important;">
 					<span class="description">وزن و اجرت را اینجا وارد کنید؛ قیمت نهایی بر اساس فرمول انتخاب‌شده محاسبه می‌شود.</span>
+				</p>
+				<p class="form-field show_if_variable" style="padding-left:12px !important;">
+					<span class="description">عیار، اجرت، سنگ و سود را اینجا یک‌بار برای همه‌ی متغیرها وارد کنید. وزن را برای هر متغیر جداگانه در تب «متغیرها» وارد کنید. اگر یک متغیر عیار، اجرت یا سنگ متفاوتی دارد، همان‌جا روی آن متغیر وارد کنید.</span>
 				</p>
 			</div>
 
@@ -258,12 +261,14 @@ class Goldmate_Product_Fields {
 						'id'                => '_goldmate_weight',
 						'label'             => 'وزن (گرم)',
 						'type'              => 'number',
+						// Variable products take a weight per variation from the table below.
+						'wrapper_class'     => 'show_if_simple',
 						'custom_attributes' => array(
 							'step' => '0.001',
 							'min'  => '0',
 						),
 						'desc_tip'          => true,
-						'description'       => 'وزن خالص طلا بدون سنگ و چرم. برای محصولات متغیر، پیش‌فرض همه‌ی متغیرها.',
+						'description'       => 'وزن خالص طلا بدون سنگ و چرم.',
 					)
 				);
 
@@ -372,7 +377,7 @@ class Goldmate_Product_Fields {
 						'id'                => '_goldmate_profit_pct',
 						'label'             => 'سود (٪)',
 						'type'              => 'number',
-						'value'             => ( '' !== trim( (string) $profit ) ) ? $profit : goldmate_option( 'goldmate_profit_pct' ),
+						'value'             => ( '' !== trim( (string) $profit ) ) ? $profit : goldmate_shop_percentages( $post_id )['profit_pct'],
 						'custom_attributes' => array(
 							'step' => '0.01',
 							'min'  => '0',

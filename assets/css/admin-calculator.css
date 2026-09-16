@@ -84,6 +84,13 @@
 	box-shadow: 0 8px 24px rgba(139, 105, 20, 0.25);
 }
 
+/* Shown while a recalculation is in flight: the amounts below are still the
+   previous inputs' answer. */
+.goldmate-calc-result.is-calculating {
+	opacity: 0.55;
+	transition: opacity 120ms ease-in;
+}
+
 .goldmate-calc-result-row {
 	display: grid;
 	grid-template-columns: 1.1fr 1fr 1.4fr;
@@ -95,6 +102,12 @@
 
 .goldmate-calc-result-row:last-child {
 	border-bottom: 0;
+}
+
+/* Component and rounding rows sit in their own wrapper, so the rule above
+   would drop the divider mid-panel rather than at the end of it. */
+.goldmate-calc-result [data-out="components"] .goldmate-calc-result-row:last-child {
+	border-bottom: 1px solid rgba(255, 255, 255, 0.18);
 }
 
 .goldmate-calc-result-row .label {

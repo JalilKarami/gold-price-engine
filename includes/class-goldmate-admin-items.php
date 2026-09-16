@@ -21,7 +21,6 @@ class Goldmate_Admin_Items {
 				<h2 class="gm-items__title">تنظیمات قیمت فلزات گرانبها</h2>
 				<div class="gm-items__actions">
 					<button type="submit" class="button button-primary" name="goldmate_action" value="save_rate_items">ذخیره همه</button>
-					<button type="submit" class="button" name="goldmate_action" value="add_rate_item">اضافه کردن آیتم</button>
 					<button type="submit" class="button" name="goldmate_action" value="fetch_due_rate_items">فراخوانی موعد‌دار</button>
 				</div>
 			</div>
@@ -51,7 +50,7 @@ class Goldmate_Admin_Items {
 					<button type="submit" class="button button-primary" name="goldmate_action" value="save_rate_items">ذخیره همه</button>
 				</div>
 			</div>
-			<p class="description gm-items__hint">هر منبع (ATN / BrsApi / TGJU) یک آیتم جداست. فقط یکی را «مرجع مقیاس عیار» کنید. پیش‌فرض‌های منبع با تغییر «نوع منبع» پر می‌شوند.</p>
+			<p class="description gm-items__hint">سه منبع قیمت طلای ۱۸ عیار (ATN / BrsApi / TGJU)، هر کدام یک آیتم. قیمت روز، سود ٪ و مالیات ٪ فروشگاه فقط از همین تب خوانده می‌شوند؛ محصولات از آیتم فرمول خود (پیش‌فرض: gold18) پیروی می‌کنند. اگر دریافت gold18 ناموفق باشد، منابع دیگر به ترتیب «اولویت» امتحان می‌شوند و اولین نرخ موفق (با همان محافظ‌های حداکثر انحراف و حداقل تغییر) روی gold18 اعمال می‌شود. فقط یکی را «مرجع مقیاس عیار» کنید.</p>
 		</div>
 		<?php
 		self::print_preset_script();
@@ -300,10 +299,6 @@ class Goldmate_Admin_Items {
 				<div class="gm-item-actions">
 					<button type="submit" class="button" name="goldmate_action" value="fetch_rate_item_<?php echo esc_attr( $id ); ?>">آزمایش</button>
 					<button type="submit" class="button button-primary" name="goldmate_action" value="apply_rate_item_<?php echo esc_attr( $id ); ?>">اعمال</button>
-					<button type="submit" class="button" name="goldmate_action" value="dup_rate_item_<?php echo esc_attr( $id ); ?>">کپی</button>
-					<?php if ( ! $locked ) : ?>
-						<button type="submit" class="button button-link-delete" name="goldmate_action" value="del_rate_item_<?php echo esc_attr( $id ); ?>" onclick="return confirm('حذف این آیتم؟');">حذف</button>
-					<?php endif; ?>
 				</div>
 			</td>
 

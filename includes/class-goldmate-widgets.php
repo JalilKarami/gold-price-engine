@@ -83,7 +83,7 @@ class Goldmate_Widgets {
 		);
 
 		$wage_mode   = Goldmate_Calculator::normalize_wage_mode( $atts['wage_mode'] );
-		$rate        = goldmate_positive_float( goldmate_option( 'goldmate_rate_per_gram' ) );
+		$rate        = goldmate_reference_rate();
 		$id          = 'goldmate-calc-' . wp_unique_id();
 		$orientation = ( 'horizontal' === $atts['orientation'] ) ? 'horizontal' : 'vertical';
 		$grid_style  = ( 'horizontal' === $orientation )
@@ -183,7 +183,12 @@ class Goldmate_Widgets {
 			'accessories' => isset( $_POST['accessories'] ) ? goldmate_positive_float( wp_unslash( $_POST['accessories'] ) ) : 0,
 		);
 
-		$rate = goldmate_positive_float( goldmate_option( 'goldmate_rate_per_gram' ) );
+		// Same profit and tax the products get from the fetch tab's reference item.
+		$shop                   = goldmate_shop_percentages();
+		$inputs['profit_pct']   = $shop['profit_pct'];
+		$inputs['item_tax_pct'] = $shop['tax_pct'];
+
+		$rate = goldmate_reference_rate();
 		$b    = Goldmate_Calculator::calculate_from_inputs( $inputs, $rate, 0 );
 
 		if ( false === $b ) {

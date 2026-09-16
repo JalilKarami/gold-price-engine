@@ -164,15 +164,36 @@ class Goldmate_Fetcher {
 			)
 		);
 
+		$failover_note = '';
+
 		if ( '' !== $result['error'] || $result['rate'] <= 0 ) {
-			return $result;
-		}
 
-		$rate = self::apply_adjust( $result['rate'], $item );
+			// Only the reference item prices products, so only it borrows a rate
+			// from the backup sources when its own feed is down. A manual item has
+			// no feed to be down: its price is whatever the admin typed.
+			if ( Goldmate_Rate_Items::DEFAULT_SLUG !== $item['slug']
+				|| in_array( $item['source_type'], array( 'manual', '' ), true ) ) {
+				return $result;
+			}
 
-		// Shop currency is Toman; convert Rial sources unless a custom multiplier already did.
-		if ( isset( $item['unit'] ) && 'rial' === $item['unit'] && abs( (float) $item['multiplier'] - 1.0 ) < 0.0000001 ) {
-			$rate = $rate / 10;
+			$backup = self::fetch_from_backups( $item );
+
+			if ( empty( $backup['ok'] ) ) {
+				$result['error'] = $result['error'] . ' | ' . $backup['error'];
+				Goldmate_Rate_Items::update( (int) $item['id'], array( 'last_error' => $result['error'] ) );
+				return $result;
+			}
+
+			$failover_note = sprintf(
+				'منبع اصلی ناموفق بود (%s)؛ نرخ از منبع پشتیبان «%s» گرفته شد.',
+				$result['error'],
+				$backup['label']
+			);
+
+			$result = $backup;
+			$rate   = $backup['rate'];
+		} else {
+			$rate = self::normalize_rate( $result['rate'], $item );
 		}
 
 		if ( ! $force && ! self::passes_min_change( $rate, (float) $item['rate'] ) ) {
@@ -201,10 +222,106 @@ class Goldmate_Fetcher {
 			)
 		);
 
+		// set_rate() clears last_error; keep the outage visible on the item and
+		// the status tab while the backup is carrying the price.
+		if ( '' !== $failover_note ) {
+			Goldmate_Rate_Items::update( (int) $item['id'], array( 'last_error' => $failover_note ) );
+		}
+
 		$result['ok']   = true;
 		$result['rate'] = $rate;
 		$result['error'] = '';
 		return $result;
+	}
+
+	/**
+	 * Tries the other rate items, in priority order, for the reference item.
+	 *
+	 * Each backup is fetched with its own connection settings and normalised with
+	 * its own unit and adjustment, then stored on its own row (without repricing)
+	 * so the fetch tab shows what it returned. The caller applies the rate to the
+	 * reference item through the usual min-change and deviation guards.
+	 *
+	 * @param array $primary Reference item.
+	 * @return array{ok:bool,rate:float,error:string,raw:string,provider?:string,label?:string}
+	 */
+	protected static function fetch_from_backups( $primary ) {
+
+		$errors = array();
+
+		foreach ( Goldmate_Rate_Items::all() as $backup ) {
+
+			if ( (int) $backup['id'] === (int) $primary['id'] ) {
+				continue;
+			}
+
+			if ( in_array( $backup['source_type'], array( 'manual', '' ), true ) ) {
+				continue;
+			}
+
+			$try = self::fetch_item( $backup );
+
+			Goldmate_Rate_Items::update(
+				(int) $backup['id'],
+				array(
+					'checked_at' => time(),
+					'last_error' => $try['error'],
+				)
+			);
+
+			if ( '' !== $try['error'] || $try['rate'] <= 0 ) {
+				$errors[] = $backup['label'] . ': ' . $try['error'];
+				continue;
+			}
+
+			$rate     = self::normalize_rate( $try['rate'], $backup );
+			$provider = ! empty( $try['provider'] ) ? (string) $try['provider'] : (string) $backup['source_type'];
+
+			Goldmate_Rate_Items::set_rate(
+				(int) $backup['id'],
+				$rate,
+				'auto',
+				array(
+					'provider'   => $provider,
+					'skip_batch' => true,
+				)
+			);
+
+			return array(
+				'ok'       => true,
+				'rate'     => $rate,
+				'error'    => '',
+				'raw'      => $try['raw'],
+				'provider' => $provider,
+				'label'    => (string) $backup['label'],
+			);
+		}
+
+		return array(
+			'ok'    => false,
+			'rate'  => 0.0,
+			'error' => $errors ? implode( ' | ', $errors ) : 'منبع پشتیبانی تنظیم نشده است.',
+			'raw'   => '',
+		);
+	}
+
+	/**
+	 * Turns a fetched per-gram figure into the shop's Toman rate for one item.
+	 *
+	 * @param float $rate Fetched rate, multiplier already applied.
+	 * @param array $item Rate item the figure came from.
+	 * @return float
+	 */
+	protected static function normalize_rate( $rate, $item ) {
+
+		$rate = self::apply_adjust( $rate, $item );
+
+		// Shop currency is Toman; convert Rial sources unless a custom multiplier already did.
+		if ( isset( $item['unit'] ) && 'rial' === $item['unit'] && abs( (float) $item['multiplier'] - 1.0 ) < 0.0000001 ) {
+			$rate = $rate / 10;
+		}
+
+		return $rate;
 	}
 
 	/**

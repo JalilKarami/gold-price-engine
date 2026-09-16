@@ -19,6 +19,7 @@ class Goldmate_Calculator_Admin {
 	public static function init() {
 
 		add_action( 'admin_enqueue_scripts', array( __CLASS__, 'enqueue_assets' ) );
+		add_action( 'wp_ajax_goldmate_admin_calc', array( __CLASS__, 'ajax_calculate' ) );
 		add_action( 'wp_ajax_goldmate_admin_similar', array( __CLASS__, 'ajax_similar_products' ) );
 	}
 
@@ -52,18 +53,14 @@ class Goldmate_Calculator_Admin {
 			true
 		);
 
-		$rate = goldmate_reference_rate();
-
+		// The breakdown itself is computed server-side by Goldmate_Calculator, so the
+		// script only needs somewhere to post to.
 		wp_localize_script(
 			'goldmate-admin-calculator',
 			'goldmateAdminCalc',
 			array(
-				'ajaxUrl'   => admin_url( 'admin-ajax.php' ),
-				'nonce'     => wp_create_nonce( 'goldmate_admin_calc' ),
-				'currency'  => 'تومان',
-				'roundTo'   => goldmate_positive_float( goldmate_option( 'goldmate_round_to' ) ),
-				'roundMode' => (string) goldmate_option( 'goldmate_round_mode' ),
-				'rate18'    => $rate,
+				'ajaxUrl' => admin_url( 'admin-ajax.php' ),
+				'nonce'   => wp_create_nonce( 'goldmate_admin_calc' ),
 			)
 		);
 	}
@@ -73,9 +70,12 @@ class Goldmate_Calculator_Admin {
 	 */
 	public static function render_admin_tab() {
 
+		// Starting values mirror the fetch tab's gold18 item, so an untouched form
+		// prices exactly like a product on the default formula.
 		$rate_18     = goldmate_reference_rate();
-		$profit_pct  = goldmate_positive_float( goldmate_option( 'goldmate_profit_pct' ) );
-		$tax_pct     = goldmate_positive_float( goldmate_option( 'goldmate_tax_pct' ) );
+		$shop        = goldmate_shop_percentages();
+		$profit_pct  = $shop['profit_pct'];
+		$tax_pct     = $shop['tax_pct'];
 		$tax_acc     = 'yes' === goldmate_option( 'goldmate_tax_accessories' );
 		$wage_mode   = Goldmate_Calculator::normalize_wage_mode( goldmate_option( 'goldmate_default_wage_mode' ) );
 		?>
@@ -83,7 +83,7 @@ class Goldmate_Calculator_Admin {
 			<h2 class="goldmate-calc-title">ماشین حساب محاسبه‌گر قیمت</h2>
 
 			<?php if ( $rate_18 <= 0 ) : ?>
-				<div class="notice notice-warning inline"><p>قیمت روز طلا هنوز تنظیم نشده است. ابتدا در تب «قیمت‌گذاری» یا «دریافت خودکار» نرخ ۱۸ عیار را وارد کنید.</p></div>
+				<div class="notice notice-warning inline"><p>قیمت روز طلا هنوز تنظیم نشده است. ابتدا در تب «تنظیمات فراخوانی قیمت» نرخ آیتم gold18 را دریافت یا وارد کنید.</p></div>
 			<?php endif; ?>
 
 			<div class="goldmate-calc-card">
@@ -211,6 +211,7 @@ class Goldmate_Calculator_Admin {
 						<span class="amount" data-out="accessories">—</span>
 						<span class="formula">قیمت سنگ، چرم و متعلقات</span>
 					</div>
+					<div data-out="components"></div>
 					<div class="goldmate-calc-result-row">
 						<span class="label">مالیات</span>
 						<span class="amount" data-out="tax">—</span>
@@ -232,6 +233,193 @@ class Goldmate_Calculator_Admin {
 			</div>
 		</div>
 		<?php
+	}
+
+	/**
+	 * AJAX: runs the shop's own pricing formula over the tab's form values.
+	 *
+	 * The tab is a what-if scratchpad, so the tax rate and the two "apply to
+	 * accessories" switches come from the form rather than the shop settings;
+	 * everything else — components, discounts, the tax base and rounding — is
+	 * whatever Goldmate_Calculator would do to a real product.
+	 */
+	public static function ajax_calculate() {
+
+		if ( ! current_user_can( Goldmate_Admin::CAPABILITY ) ) {
+			wp_send_json_error();
+		}
+
+		check_ajax_referer( 'goldmate_admin_calc', 'nonce' );
+
+		$post  = wp_unslash( $_POST ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput -- each field is sanitised below.
+		$karat = isset( $post['karat'] ) ? goldmate_positive_float( $post['karat'] ) : 0;
+
+		$inputs = array(
+			'weight'             => isset( $post['weight'] ) ? goldmate_positive_float( $post['weight'] ) : 0,
+			'karat'              => $karat > 0 ? $karat : 18,
+			'wage_mode'          => isset( $post['wage_mode'] ) ? sanitize_text_field( $post['wage_mode'] ) : 'pct',
+			'wage_pct'           => isset( $post['wage_pct'] ) ? goldmate_positive_float( $post['wage_pct'] ) : 0,
+			'wage_fixed'         => isset( $post['wage_fixed'] ) ? goldmate_positive_float( $post['wage_fixed'] ) : 0,
+			'accessories'        => isset( $post['accessories'] ) ? goldmate_positive_float( $post['accessories'] ) : 0,
+			'profit_pct'         => isset( $post['profit_pct'] ) ? goldmate_positive_float( $post['profit_pct'] ) : 0,
+			'tax_pct'            => isset( $post['tax_pct'] ) ? goldmate_positive_float( $post['tax_pct'] ) : 0,
+			'tax_accessories'    => ! empty( $post['tax_accessories'] ),
+			'profit_accessories' => ! empty( $post['profit_accessories'] ),
+		);
+
+		$rate_18   = isset( $post['rate_18'] ) ? goldmate_positive_float( $post['rate_18'] ) : 0;
+		$breakdown = Goldmate_Calculator::calculate_from_inputs( $inputs, $rate_18, 0 );
+
+		if ( false === $breakdown ) {
+			wp_send_json_error( array( 'message' => 'نرخ روز و وزن را وارد کنید.' ) );
+		}
+
+		wp_send_json_success(
+			array(
+				'out'        => self::output_fields( $breakdown ),
+				'components' => self::components_html( $breakdown ),
+				'unitRate'   => number_format( round( (float) $breakdown['rate'] ), 0, '.', ',' ),
+			)
+		);
+	}
+
+	/**
+	 * Maps a breakdown onto the tab's `data-out` slots.
+	 *
+	 * @param array $b Breakdown from Goldmate_Calculator.
+	 * @return array<string,string>
+	 */
+	protected static function output_fields( $b ) {
+
+		return array(
+			'karat_label'    => 'عیار ' . self::decimal( $b['karat'], 1 ),
+			'rate_unit'      => self::money( $b['rate'] ),
+			'gold'           => self::money( $b['gold'] ),
+			'gold_formula'   => self::decimal( $b['weight'], 3 ) . ' گرم × ' . self::money( $b['rate'] ),
+			'wage'           => self::money( $b['wage'] ),
+			'wage_formula'   => self::wage_formula( $b ),
+			'profit'         => self::money( $b['profit'] ),
+			'profit_formula' => '(' . ( ! empty( $b['profit_accessories'] ) ? 'طلا + اجرت + ملحقات' : 'طلا + اجرت' )
+				. ') × ' . self::decimal( $b['profit_pct'], 2 ) . '٪',
+			'accessories'    => self::money( $b['accessories'] ),
+			'tax'            => self::money( $b['tax'] ),
+			'tax_formula'    => self::tax_formula( $b ),
+			'total'          => self::money( $b['total'] ),
+		);
+	}
+
+	/**
+	 * The wage row's working, in the shape the chosen wage mode takes.
+	 *
+	 * @param array $b Breakdown.
+	 * @return string
+	 */
+	protected static function wage_formula( $b ) {
+
+		$weight = self::decimal( $b['weight'], 3 );
+
+		if ( 'fixed' === $b['wage_mode'] ) {
+			return $weight . ' گرم × ' . self::money( $b['wage_fixed'] ) . ' /گرم';
+		}
+
+		if ( 'combined' === $b['wage_mode'] ) {
+			return '(' . $weight . ' × ' . self::money( $b['wage_fixed'] ) . ') + ('
+				. self::money( $b['gold'] ) . ' × ' . self::decimal( $b['wage_pct'], 2 ) . '٪)';
+		}
+
+		return 'قیمت طلا × ' . self::decimal( $b['wage_pct'], 2 ) . '٪';
+	}
+
+	/**
+	 * The tax row's working, naming only the parts the shop actually taxes.
+	 *
+	 * @param array $b Breakdown.
+	 * @return string
+	 */
+	protected static function tax_formula( $b ) {
+
+		$parts = array();
+
+		if ( ! empty( $b['tax_on_wage'] ) ) {
+			$parts[] = 'اجرت';
+		}
+		if ( ! empty( $b['tax_on_profit'] ) ) {
+			$parts[] = 'سود';
+		}
+		if ( ! empty( $b['tax_accessories'] ) ) {
+			$parts[] = 'ملحقات';
+		}
+
+		if ( ! $parts ) {
+			return 'پایه مالیاتی خالی است';
+		}
+
+		return '(' . implode( ' + ', $parts ) . ') × ' . self::decimal( $b['tax_pct'], 2 ) . '٪';
+	}
+
+	/**
+	 * Extra result rows: shop-defined price components, then the rounding step.
+	 *
+	 * Without these the listed amounts would not add up to the total shown.
+	 *
+	 * @param array $b Breakdown.
+	 * @return string
+	 */
+	protected static function components_html( $b ) {
+
+		$rows = array();
+
+		if ( ! empty( $b['components'] ) && is_array( $b['components'] ) ) {
+			foreach ( $b['components'] as $line ) {
+				$rows[] = array( $line['label'], $line['amount'], 'جزء قیمت سفارشی' );
+			}
+		}
+
+		$rounding = Goldmate_Calculator::rounding_difference( $b );
+
+		if ( 0.0 !== $rounding ) {
+			$rows[] = array( 'گرد کردن', $rounding, '' );
+		}
+
+		$html = '';
+
+		foreach ( $rows as $row ) {
+			$html .= '<div class="goldmate-calc-result-row">'
+				. '<span class="label">' . esc_html( $row[0] ) . '</span>'
+				. '<span class="amount">' . esc_html( self::money( $row[1] ) ) . '</span>'
+				. '<span class="formula">' . esc_html( $row[2] ) . '</span>'
+				. '</div>';
+		}
+
+		return $html;
+	}
+
+	/**
+	 * Formats a Toman amount the way the result panel shows it.
+	 *
+	 * @param float $amount Raw amount.
+	 * @return string
+	 */
+	protected static function money( $amount ) {
+		return number_format( round( (float) $amount ), 0, '.', ',' ) . ' تومان';
+	}
+
+	/**
+	 * Formats a plain number, dropping decimals that are all zeros.
+	 *
+	 * @param float $value  Raw value.
+	 * @param int   $digits Maximum decimal places.
+	 * @return string
+	 */
+	protected static function decimal( $value, $digits = 2 ) {
+
+		$formatted = number_format( (float) $value, $digits, '.', ',' );
+
+		if ( false === strpos( $formatted, '.' ) ) {
+			return $formatted;
+		}
+
+		return rtrim( rtrim( $formatted, '0' ), '.' );
 	}
 
 	/**

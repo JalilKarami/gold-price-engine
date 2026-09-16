@@ -57,12 +57,6 @@ class Goldmate_Live {
 		$prod_int    = (int) goldmate_option( 'goldmate_ajax_products_interval' );
 		$short_int   = (int) goldmate_option( 'goldmate_ajax_shortcodes_interval' );
 
-		$legacy = (int) goldmate_option( 'goldmate_live_interval' );
-		if ( $prod_int <= 0 && $legacy > 0 ) {
-			$prod_int   = $legacy;
-			$product_on = true;
-		}
-
 		$has_shortcode = self::page_may_have_shortcode();
 		$interval      = 0;
 

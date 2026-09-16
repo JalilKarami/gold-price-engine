@@ -59,24 +59,6 @@ class Goldmate_Rate_Items {
 				'show_in_product_list' => 1,
 				'formula_type'         => 'weight',
 			),
-			array(
-				'slug'             => 'gold24',
-				'label'            => 'طلای ۲۴ عیار',
-				'priority'         => 20,
-				'is_18k_reference' => 0,
-			),
-			array(
-				'slug'             => 'mesghal',
-				'label'            => 'مثقال طلا',
-				'priority'         => 30,
-				'is_18k_reference' => 0,
-			),
-			array(
-				'slug'             => 'abshodeh',
-				'label'            => 'آبشده نقدی',
-				'priority'         => 40,
-				'is_18k_reference' => 0,
-			),
 		);
 	}
 

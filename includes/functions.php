@@ -84,9 +84,6 @@ function goldmate_defaults() {
 		'goldmate_min_change_pct'    => 0.4,
 		'goldmate_min_change_amount' => 0,
 
-		// Live storefront refresh (seconds; 0 disables). Synced from AJAX product interval.
-		'goldmate_live_interval' => 60,
-
 		// Staleness handling.
 		'goldmate_stale_hours'  => 24,
 		'goldmate_stale_action' => 'notice',
@@ -414,4 +411,38 @@ function goldmate_reference_rate() {
 	}
 
 	return goldmate_positive_float( goldmate_option( 'goldmate_rate_per_gram' ) );
+}
+
+/**
+ * Shop-level profit and tax percentages, owned by the rate item in the fetch tab.
+ *
+ * Products that set no profit of their own take it from the rate item behind
+ * their formula; ad-hoc callers (product ID 0) use the gold18 reference item.
+ * The goldmate_profit_pct / goldmate_tax_pct options are only a last resort for
+ * a store that has no rate items at all.
+ *
+ * @param int $product_id Optional product or variation ID.
+ * @return array{profit_pct:float,tax_pct:float}
+ */
+function goldmate_shop_percentages( $product_id = 0 ) {
+
+	$item = null;
+
+	if ( class_exists( 'Goldmate_Rate_Items' ) ) {
+		$item = $product_id > 0
+			? Goldmate_Rate_Items::for_product( (int) $product_id )
+			: Goldmate_Rate_Items::reference_item();
+	}
+
+	if ( $item ) {
+		return array(
+			'profit_pct' => goldmate_positive_float( $item['profit_pct'] ),
+			'tax_pct'    => goldmate_positive_float( $item['tax_pct'] ),
+		);
+	}
+
+	return array(
+		'profit_pct' => goldmate_positive_float( goldmate_option( 'goldmate_profit_pct' ) ),
+		'tax_pct'    => goldmate_positive_float( goldmate_option( 'goldmate_tax_pct' ) ),
+	);
 }

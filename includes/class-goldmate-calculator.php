@@ -56,8 +56,9 @@ class Goldmate_Calculator {
 			$inputs['rate_item_id']     = (int) $item['id'];
 			$inputs['skip_karat_scale'] = ! Goldmate_Rate_Items::uses_karat_scale( $item );
 
-			// Per-item default profit/tax when product has no override.
-			if ( '' === (string) $inputs['profit_pct'] && $item['profit_pct'] > 0 ) {
+			// The rate item owns the shop profit/tax; a product override still wins.
+			// A 0% item profit is a real setting, not a cue to fall back elsewhere.
+			if ( '' === (string) $inputs['profit_pct'] ) {
 				$inputs['profit_pct'] = $item['profit_pct'];
 			}
 			if ( empty( $inputs['tax_exempt'] ) && isset( $item['tax_pct'] ) && $item['tax_pct'] >= 0 ) {
@@ -78,6 +79,8 @@ class Goldmate_Calculator {
 	 * Runs the formula from already-resolved inputs (products or visitor calculator).
 	 *
 	 * @param array $inputs     weight, karat, wage_mode, wage_pct, wage_fixed, accessories.
+	 *                          Ad-hoc callers may also pass `tax_pct`, `tax_accessories`
+	 *                          and `profit_accessories` to override the shop settings.
 	 * @param float $rate_18    Toman per gram of 18-karat gold.
 	 * @param int   $product_id Optional product ID for filters; 0 for ad-hoc.
 	 * @return array|false
@@ -128,6 +131,21 @@ class Goldmate_Calculator {
 			$round_to = 0;
 		} elseif ( $round_to <= 0 ) {
 			$round_to = goldmate_positive_float( goldmate_option( 'goldmate_strip_below' ) );
+		}
+
+		// Ad-hoc callers — the admin what-if calculator — drive these from their own
+		// form instead of the shop settings. resolve_inputs() never sets them, so
+		// product pricing keeps reading the options.
+		$profit_accessories = ! empty( $inputs['profit_accessories'] );
+
+		if ( ! $tax_exempt && isset( $inputs['tax_pct'] ) && '' !== (string) $inputs['tax_pct'] ) {
+			$tax_pct = goldmate_positive_float( $inputs['tax_pct'] );
+			// An explicit rate outranks the selective/none shop-wide tax method.
+			$tax_method = 'all';
+		}
+
+		if ( array_key_exists( 'tax_accessories', $inputs ) ) {
+			$tax_accessories = ! empty( $inputs['tax_accessories'] );
 		}
 
 		if ( 'none' === $tax_method ) {
@@ -192,7 +210,12 @@ class Goldmate_Calculator {
 			$components = Goldmate_Components::compute( $inputs, $gold, $wage, $product_id );
 		}
 
-		$profit = ( $gold + $wage + $components['profit_base'] ) * ( $profit_pct / 100 );
+		$profit_base = $gold + $wage + $components['profit_base'];
+		if ( $profit_accessories ) {
+			$profit_base += $accessories;
+		}
+
+		$profit = $profit_base * ( $profit_pct / 100 );
 		$profit_before_discount = $profit;
 
 		$accessories_before = $accessories;
@@ -307,6 +330,9 @@ class Goldmate_Calculator {
 			'tax_pct'               => $tax_pct,
 			'tax_exempt'            => $tax_exempt,
 			'tax_accessories'       => $tax_accessories,
+			'tax_on_wage'           => $tax_on_wage,
+			'tax_on_profit'         => $tax_on_profit,
+			'profit_accessories'    => $profit_accessories,
 			'rate_item'             => isset( $inputs['rate_item'] ) ? (string) $inputs['rate_item'] : '',
 			'skip_karat_scale'      => ! empty( $inputs['skip_karat_scale'] ),
 			'discounts_enabled'     => ! empty( $discounts['enabled'] ),

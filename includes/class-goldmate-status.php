@@ -27,7 +27,12 @@ class Goldmate_Status {
 		$progress       = Goldmate_Batch::get_progress();
 		$is_stale       = class_exists( 'Goldmate_Rate_Items' ) ? Goldmate_Rate_Items::is_reference_stale() : false;
 		$scheduler      = Goldmate_Batch::has_scheduler() ? 'Action Scheduler' : 'WP-Cron';
-		$live_interval  = (int) goldmate_option( 'goldmate_live_interval' );
+		$live_interval  = 'yes' === goldmate_option( 'goldmate_ajax_products' )
+			? max( 0, (int) goldmate_option( 'goldmate_ajax_products_interval' ) )
+			: 0;
+		if ( 'yes' === goldmate_option( 'goldmate_ajax_products' ) && $live_interval <= 0 ) {
+			$live_interval = 60;
+		}
 		$change_pct     = Goldmate_Live::change_pct();
 
 		$all_items  = class_exists( 'Goldmate_Rate_Items' ) ? Goldmate_Rate_Items::all() : array();
