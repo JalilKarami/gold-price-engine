@@ -41,10 +41,6 @@ function goldmate_defaults() {
 		'goldmate_reprice_on_item_save'       => 'yes',
 		'goldmate_reprice_on_all_items_save'  => 'yes',
 		'goldmate_reprice_on_product_save'    => 'yes',
-		'goldmate_reprice_on_add_to_cart'     => 'yes',
-		'goldmate_reprice_cart_on_add'        => 'no',
-		'goldmate_reprice_cart_on_cart'       => 'no',
-		'goldmate_reprice_cart_on_checkout'   => 'yes',
 		'goldmate_store_calc_time'            => 'yes',
 		'goldmate_recalc_only_on_change'      => 'no',
 		'goldmate_price_history_hours'        => 24,
@@ -72,8 +68,6 @@ function goldmate_defaults() {
 		'goldmate_tax_on_wage'                => 'yes',
 		'goldmate_tax_on_profit'              => 'yes',
 		'goldmate_tax_selective_karats'       => array( '18', '24' ),
-		'goldmate_order_recalc'               => 'yes',
-		'goldmate_order_item_validity'        => 3,
 		'goldmate_order_auto_cancel'          => 'no',
 		'goldmate_order_auto_cancel_minutes'  => 30,
 		'goldmate_hide_shortcode_outofstock'  => 'yes',
@@ -146,12 +140,16 @@ function goldmate_positive_float( $value ) {
  */
 function goldmate_normalize_digits( $value ) {
 
-	$persian = array( '۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹', '٫' );
-	$arabic  = array( '٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩', '٬' );
-	$ascii   = array( '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '.' );
+	$persian = array( '۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹' );
+	$arabic  = array( '٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩' );
+	$ascii   = array( '0', '1', '2', '3', '4', '5', '6', '7', '8', '9' );
 
 	$value = str_replace( $persian, $ascii, $value );
 	$value = str_replace( $arabic, $ascii, $value );
+
+	// U+066B is the Arabic decimal separator and U+066C the thousands separator
+	// ("۳٬۵۰۰٬۰۰۰"); mapping the latter to a dot would read that as 3.5.
+	$value = str_replace( array( '٫', '٬' ), array( '.', ',' ), $value );
 
 	return $value;
 }

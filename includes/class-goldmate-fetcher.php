@@ -737,7 +737,7 @@ class Goldmate_Fetcher {
 	 */
 	public static function parse_number( $text, $dec = '.', $thou = ',' ) {
 		$text = goldmate_normalize_digits( $text );
-		$text = preg_replace( '/[^\d\.,\-/]/', '', $text );
+		$text = preg_replace( '~[^\d.,\-]~', '', $text );
 		if ( $thou !== '' ) {
 			$text = str_replace( $thou, '', $text );
 		}

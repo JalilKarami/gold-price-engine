@@ -2,7 +2,7 @@
 /**
  * Plugin Name: گلدمیت — محاسبه قیمت طلا
  * Description: محاسبه خودکار قیمت محصولات طلا بر اساس وزن، عیار، اجرت (درصدی یا ثابت)، سود، متعلقات و مالیات. شامل دریافت خودکار قیمت روز با منبع جایگزین، بروزرسانی دسته‌ای و نمایش آنی نرخ.
- * Version: 3.4.7
+ * Version: 3.4.8
  * Author: gold-mate.ir
  * Requires Plugins: woocommerce
  * WC requires at least: 7.0
@@ -15,7 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'GOLDMATE_VERSION', '3.4.7' );
+define( 'GOLDMATE_VERSION', '3.4.8' );
 define( 'GOLDMATE_FILE', __FILE__ );
 define( 'GOLDMATE_PATH', plugin_dir_path( __FILE__ ) );
 define( 'GOLDMATE_URL', plugin_dir_url( __FILE__ ) );

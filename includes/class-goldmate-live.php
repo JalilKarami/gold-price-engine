@@ -187,7 +187,14 @@ class Goldmate_Live {
 		}
 
 		$calc_id = $variation_id > 0 ? $variation_id : $product_id;
-		$data    = self::payload( $calc_id );
+
+		// Anonymous callers pick the ID, so a draft or private product answers
+		// like any unknown one: the rate only, no total or breakdown.
+		if ( $calc_id > 0 && ! self::can_view_price( $calc_id ) ) {
+			$calc_id = 0;
+		}
+
+		$data = self::payload( $calc_id );
 
 		if ( $variation_id > 0 ) {
 			$data['variation_id'] = $variation_id;
@@ -202,6 +209,39 @@ class Goldmate_Live {
 	}
 
 	/**
+	 * Whether the current visitor may see a live price for a product or variation.
+	 *
+	 * Mirrors what the storefront would show them: published, not behind a
+	 * password, and for a variation both the variation (disabled ones are
+	 * private) and its parent. Anyone who can edit the product sees it anyway,
+	 * so admin previews of drafts keep working.
+	 *
+	 * @param int $product_id Product or variation ID.
+	 * @return bool
+	 */
+	public static function can_view_price( $product_id ) {
+
+		$product_id = absint( $product_id );
+
+		if ( ! $product_id || ! in_array( get_post_type( $product_id ), array( 'product', 'product_variation' ), true ) ) {
+			return false;
+		}
+
+		if ( current_user_can( 'edit_post', $product_id ) ) {
+			return true;
+		}
+
+		$parent_id = (int) wp_get_post_parent_id( $product_id );
+		$owner_id  = $parent_id ? $parent_id : $product_id;
+
+		if ( 'publish' !== get_post_status( $product_id ) || 'publish' !== get_post_status( $owner_id ) ) {
+			return false;
+		}
+
+		return ! post_password_required( $owner_id );
+	}
+
+	/**
 	 * Live totals for a list of product IDs (shop/archive cards).
 	 *
 	 * @param int[] $product_ids IDs.
@@ -212,7 +252,10 @@ class Goldmate_Live {
 		$out = array();
 		foreach ( $product_ids as $id ) {
 			$id = (int) $id;
-			$b  = Goldmate_Calculator::calculate( $id );
+			if ( ! self::can_view_price( $id ) ) {
+				continue;
+			}
+			$b = Goldmate_Calculator::calculate( $id );
 			if ( false === $b ) {
 				continue;
 			}

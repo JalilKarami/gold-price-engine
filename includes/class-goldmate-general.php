@@ -1,7 +1,7 @@
 <?php
 /**
  * Runtime behaviour for the General (عمومی) settings tab:
- * cart/checkout recalculation, out-of-service display, order rules, visibility.
+ * live cart pricing, out-of-service display, order rules, visibility.
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -17,10 +17,9 @@ class Goldmate_General {
 	 */
 	public static function init() {
 
-		add_action( 'woocommerce_add_to_cart', array( __CLASS__, 'on_add_to_cart' ), 20, 6 );
-		add_action( 'woocommerce_before_cart', array( __CLASS__, 'on_cart_page' ), 5 );
-		add_action( 'woocommerce_before_checkout_form', array( __CLASS__, 'on_checkout_page' ), 5 );
-		add_action( 'woocommerce_check_cart_items', array( __CLASS__, 'maybe_recalc_order_items' ), 5 );
+		// Cart lines always carry the live price, set in memory; products are never saved here.
+		add_action( 'woocommerce_cart_loaded_from_session', array( __CLASS__, 'on_cart_loaded' ), 20 );
+		add_action( 'woocommerce_before_calculate_totals', array( __CLASS__, 'on_before_calculate_totals' ), 20 );
 
 		add_filter( 'woocommerce_get_price_html', array( __CLASS__, 'maybe_oos_price_html' ), 40, 2 );
 		add_filter( 'woocommerce_is_purchasable', array( __CLASS__, 'maybe_oos_purchasable' ), 40, 2 );
@@ -164,93 +163,93 @@ class Goldmate_General {
 	}
 
 	/**
-	 * Reprices every gold line currently in the cart.
-	 */
-	public static function reprice_cart() {
-
-		if ( ! function_exists( 'WC' ) || ! WC()->cart ) {
-			return;
-		}
-
-		foreach ( WC()->cart->get_cart() as $item ) {
-			$id = ! empty( $item['variation_id'] ) ? (int) $item['variation_id'] : (int) $item['product_id'];
-			if ( $id > 0 ) {
-				Goldmate_Pricing::apply( $id );
-			}
-		}
-
-		WC()->cart->calculate_totals();
-	}
-
-	/**
-	 * After add-to-cart: optional product and/or full-cart reprice.
+	 * Live totals already worked out during this request, keyed by product ID.
 	 *
-	 * @param string $cart_item_key Cart key.
-	 * @param int    $product_id    Product ID.
-	 * @param int    $quantity      Qty.
-	 * @param int    $variation_id  Variation ID.
+	 * WooCommerce recalculates totals several times per request (and once per
+	 * shipping package), so each line is only run through the calculator once.
+	 *
+	 * @var array<int,float|false>
 	 */
-	public static function on_add_to_cart( $cart_item_key, $product_id, $quantity, $variation_id = 0 ) {
-
-		$id = $variation_id ? (int) $variation_id : (int) $product_id;
-
-		if ( 'yes' === goldmate_option( 'goldmate_reprice_on_add_to_cart' ) && $id > 0 ) {
-			Goldmate_Pricing::apply( $id );
-		}
-
-		if ( 'yes' === goldmate_option( 'goldmate_reprice_cart_on_add' ) ) {
-			self::reprice_cart();
-		}
-	}
+	protected static $cart_prices = array();
 
 	/**
-	 * Cart page open.
+	 * Sets every gold line's price from the current rate, in memory only.
+	 *
+	 * The cart works on its own copy of each product, loaded fresh from the
+	 * database on every request, so setting the price on that copy is enough for
+	 * the line price, the totals and the order WooCommerce creates from them.
+	 * Nothing is saved: the stored catalogue price belongs to the background
+	 * reprice, and saving products from shopper requests would make concurrent
+	 * carts overwrite the same rows, flush caches and race admin edits.
+	 *
+	 * The order snapshot (Goldmate_Order) runs the same calculation at checkout,
+	 * so the invoice breakdown and the charged line price agree.
+	 *
+	 * @param WC_Cart $cart Cart.
+	 * @return bool Whether any line's price differs from what the session last totalled.
 	 */
-	public static function on_cart_page() {
+	public static function price_cart_items( $cart ) {
 
-		if ( 'yes' === goldmate_option( 'goldmate_reprice_cart_on_cart' ) ) {
-			self::reprice_cart();
-		}
-	}
-
-	/**
-	 * Checkout page open.
-	 */
-	public static function on_checkout_page() {
-
-		if ( 'yes' === goldmate_option( 'goldmate_reprice_cart_on_checkout' ) ) {
-			self::reprice_cart();
-		}
-	}
-
-	/**
-	 * Recalc cart gold lines when their priced_at is older than the order-item window.
-	 */
-	public static function maybe_recalc_order_items() {
-
-		if ( 'yes' !== goldmate_option( 'goldmate_order_recalc' ) ) {
-			return;
+		if ( ! $cart instanceof WC_Cart ) {
+			return false;
 		}
 
-		$window = (float) goldmate_option( 'goldmate_order_item_validity' );
+		$changed = false;
 
-		if ( $window <= 0 || ! function_exists( 'WC' ) || ! WC()->cart ) {
-			return;
-		}
+		foreach ( $cart->get_cart() as $item ) {
 
-		$limit = $window * HOUR_IN_SECONDS;
-		$now   = time();
-
-		foreach ( WC()->cart->get_cart() as $item ) {
-			$id = ! empty( $item['variation_id'] ) ? (int) $item['variation_id'] : (int) $item['product_id'];
-			if ( $id <= 0 ) {
+			if ( empty( $item['data'] ) || ! $item['data'] instanceof WC_Product ) {
 				continue;
 			}
-			$priced_at = (int) get_post_meta( $id, '_goldmate_priced_at', true );
-			if ( $priced_at <= 0 || ( $now - $priced_at ) >= $limit ) {
-				Goldmate_Pricing::apply( $id );
+
+			$id = (int) $item['data']->get_id();
+
+			if ( ! array_key_exists( $id, self::$cart_prices ) ) {
+				$b = Goldmate_Calculator::calculate( $id );
+				self::$cart_prices[ $id ] = false === $b ? false : (float) $b['total'];
+			}
+
+			if ( false === self::$cart_prices[ $id ] ) {
+				continue;
+			}
+
+			$price = self::$cart_prices[ $id ];
+
+			$item['data']->set_price( $price );
+
+			if ( isset( $item['line_subtotal'], $item['quantity'] )
+				&& abs( ( $price * (float) $item['quantity'] ) - (float) $item['line_subtotal'] ) > 0.5 ) {
+				$changed = true;
 			}
 		}
+
+		return $changed;
+	}
+
+	/**
+	 * Prices the cart as it comes out of the session.
+	 *
+	 * WooCommerce only recalculates totals here when the cart changed, so the
+	 * mini-cart would otherwise show the totals stored at the last change. When
+	 * the gold rate moved since, the totals are refreshed; that updates the
+	 * shopper's session, never the product.
+	 *
+	 * @param WC_Cart $cart Cart.
+	 */
+	public static function on_cart_loaded( $cart ) {
+
+		if ( self::price_cart_items( $cart ) && ! is_null( WC()->session->get( 'cart_totals', null ) ) ) {
+			$cart->calculate_totals();
+		}
+	}
+
+	/**
+	 * Prices the cart right before WooCommerce totals it.
+	 *
+	 * @param WC_Cart $cart Cart.
+	 */
+	public static function on_before_calculate_totals( $cart ) {
+		self::price_cart_items( $cart );
 	}
 
 	/**

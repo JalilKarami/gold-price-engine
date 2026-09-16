@@ -173,6 +173,7 @@ class Goldmate_Admin {
 		if ( preg_match( '/^set_default_formula_(\d+)$/', $action, $m ) ) {
 			if ( Goldmate_Formulas::set_default( (int) $m[1] ) ) {
 				self::notice( 'success', 'فرمول پیش‌فرض تنظیم شد.' );
+				self::reprice_after_save();
 			} else {
 				self::notice( 'error', 'تنظیم فرمول پیش‌فرض ممکن نیست.' );
 			}
@@ -182,6 +183,7 @@ class Goldmate_Admin {
 		if ( preg_match( '/^del_formula_(\d+)$/', $action, $m ) ) {
 			if ( Goldmate_Formulas::delete( (int) $m[1] ) ) {
 				self::notice( 'success', 'فرمول حذف شد.' );
+				self::reprice_after_save();
 			} else {
 				self::notice( 'error', 'حذف فرمول ممکن نیست (ممکن است پیش‌فرض باشد).' );
 			}
@@ -206,6 +208,10 @@ class Goldmate_Admin {
 				}
 
 				self::notice( 'success', 'تنظیمات ذخیره شد.' );
+
+				if ( in_array( $tab, array( 'general', 'pricing', 'components' ), true ) ) {
+					self::reprice_after_save();
+				}
 				break;
 
 			case 'clear_rate_history':
@@ -241,16 +247,19 @@ class Goldmate_Admin {
 			case 'save_discounts_global':
 				Goldmate_Discounts::save_global_from_post( $_POST );
 				self::notice( 'success', 'تخفیف‌های سراسری ذخیره شد.' );
+				self::reprice_after_save();
 				break;
 
 		case 'save_rate_items':
 			Goldmate_Admin_Items::save_from_post( $_POST );
 			self::notice( 'success', 'آیتم‌های نرخ ذخیره شد.' );
+			self::reprice_after_save();
 			break;
 
 		case 'save_formulas':
 			Goldmate_Admin_Formulas::save_from_post( $_POST );
 			self::notice( 'success', 'فرمول‌ها ذخیره شد.' );
+			self::reprice_after_save();
 			break;
 
 		case 'add_formula':
@@ -283,6 +292,26 @@ class Goldmate_Admin {
 				self::notice( 'warning', 'به‌روزرسانی دسته‌ای متوقف شد. ممکن است بخشی از محصولات با قیمت قبلی مانده باشند.' );
 				break;
 		}
+	}
+
+	/**
+	 * Queues a catalogue reprice after a save that changes how prices are built.
+	 *
+	 * Products store their price, so a new profit, tax, formula, component or
+	 * discount only reaches the shop once they are repriced. Without this the
+	 * catalogue keeps the old figure until the next rate change, while add-to-cart
+	 * and checkout reprice on the spot, so the cart disagrees with the product page.
+	 * A batch already running (a rate change in the same save) is left alone: it
+	 * reads the settings that were just written.
+	 */
+	protected static function reprice_after_save() {
+
+		if ( 'yes' !== goldmate_option( 'goldmate_reprice_on_all_items_save' ) || Goldmate_Batch::is_running() ) {
+			return;
+		}
+
+		Goldmate_Batch::start( 'تغییر تنظیمات' );
+		self::notice( 'info', 'به‌روزرسانی قیمت محصولات در پس‌زمینه آغاز شد.' );
 	}
 
 	/**
