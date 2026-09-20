@@ -28,6 +28,9 @@ class Goldmate_Order {
 
 		add_filter( 'woocommerce_get_item_data', array( __CLASS__, 'cart_item_data' ), 10, 2 );
 
+		// Size, color and weight go on rows of their own ("سایز: 56"), not after the name.
+		add_filter( 'woocommerce_product_variation_title_include_attributes', array( __CLASS__, 'variation_title_attributes' ), 10, 2 );
+
 		// Classic checkout and the block checkout both run through this hook,
 		// because the Store API delegates line items to WC_Checkout.
 		add_action( 'woocommerce_checkout_create_order_line_item', array( __CLASS__, 'on_checkout_line_item' ), 10, 4 );
@@ -123,7 +126,82 @@ class Goldmate_Order {
 	 * ------------------------------------------------------------------ */
 
 	/**
+	 * Whether a product (or a variation's parent) is priced by GoldMate.
+	 *
+	 * @param WC_Product $product Product.
+	 * @return bool
+	 */
+	protected static function is_gold( $product ) {
+
+		if ( ! $product instanceof WC_Product ) {
+			return false;
+		}
+
+		$id = $product->get_parent_id() ? $product->get_parent_id() : $product->get_id();
+
+		return 'yes' === get_post_meta( $id, '_goldmate_enabled', true );
+	}
+
+	/**
+	 * Keeps attributes out of gold variation names.
+	 *
+	 * WooCommerce otherwise names a variation "Ring - 56, Rose gold" and then
+	 * hides those attributes from the rows under the line. Without them in the
+	 * name, the cart, checkout, e-mails and invoices list each attribute on its
+	 * own row. WooCommerce rewrites a stored name that no longer matches the
+	 * next time the variation is read, so existing variations follow too.
+	 *
+	 * @param bool                 $include   Whether to include attributes.
+	 * @param WC_Product_Variation $variation Variation.
+	 * @return bool
+	 */
+	public static function variation_title_attributes( $include, $variation ) {
+		return self::is_gold( $variation ) ? false : $include;
+	}
+
+	/**
+	 * The "وزن" row for a gold line whose weight is not already shown.
+	 *
+	 * A weight attribute already has its own row, so only lines whose weight
+	 * lives in GoldMate's weight field (e.g. size + color rings) get one.
+	 *
+	 * @param array $cart_item Cart item.
+	 * @return array|null
+	 */
+	protected static function weight_row( $cart_item ) {
+
+		$product = isset( $cart_item['data'] ) ? $cart_item['data'] : null;
+
+		if ( ! self::is_gold( $product ) ) {
+			return null;
+		}
+
+		if ( $product instanceof WC_Product_Variation && null !== Goldmate_Variation_Table::attribute_weight( $product ) ) {
+			return null;
+		}
+
+		$weight = goldmate_meta_float( $product->get_id(), '_goldmate_weight' );
+
+		if ( $weight <= 0 && $product->get_parent_id() ) {
+			$weight = goldmate_meta_float( $product->get_parent_id(), '_goldmate_weight' );
+		}
+
+		if ( $weight <= 0 ) {
+			return null;
+		}
+
+		// Written like the weight attribute values ("3.049 گرم") so every
+		// weight in the cart reads the same.
+		return array(
+			'key'   => 'وزن',
+			'value' => rtrim( rtrim( number_format( $weight, 3, '.', '' ), '0' ), '.' ) . ' گرم',
+		);
+	}
+
+	/**
 	 * Shows the breakdown under each gold line in the cart and at checkout.
+	 *
+	 * With the breakdown turned off, the line still shows its gold weight.
 	 *
 	 * @param array $item_data Existing rows.
 	 * @param array $cart_item Cart item.
@@ -132,6 +210,13 @@ class Goldmate_Order {
 	public static function cart_item_data( $item_data, $cart_item ) {
 
 		if ( 'yes' !== goldmate_option( 'goldmate_cart_details' ) ) {
+
+			$row = self::weight_row( $cart_item );
+
+			if ( $row ) {
+				$item_data[] = $row;
+			}
+
 			return $item_data;
 		}
 
@@ -235,7 +320,14 @@ class Goldmate_Order {
 		// figures behind an old invoice can always be audited.
 		$item->add_meta_data( self::SNAPSHOT, wp_json_encode( $b, JSON_UNESCAPED_UNICODE ), true );
 
-		foreach ( self::invoice_rows( $b, self::detail_level(), $currency ) as $label => $value ) {
+		$rows = self::invoice_rows( $b, self::detail_level(), $currency );
+
+		// A weight attribute already puts "وزن" on the line; don't repeat it.
+		if ( $item->get_variation_id() && null !== Goldmate_Variation_Table::attribute_weight( $item->get_variation_id() ) ) {
+			unset( $rows['وزن'] );
+		}
+
+		foreach ( $rows as $label => $value ) {
 			$item->add_meta_data( $label, $value, true );
 		}
 

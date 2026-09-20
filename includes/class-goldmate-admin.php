@@ -207,11 +207,20 @@ class Goldmate_Admin {
 					Goldmate_Components::save_from_post( $_POST );
 				}
 
+				if ( 'appearance' === $tab ) {
+					Goldmate_Appearance::save_from_post( $_POST );
+				}
+
 				self::notice( 'success', 'تنظیمات ذخیره شد.' );
 
 				if ( in_array( $tab, array( 'general', 'pricing', 'components' ), true ) ) {
 					self::reprice_after_save();
 				}
+				break;
+
+			case 'appearance_reset':
+				Goldmate_Appearance::reset();
+				self::notice( 'success', 'ظاهر به حالت پیش‌فرض برگشت.' );
 				break;
 
 			case 'clear_rate_history':
@@ -382,6 +391,8 @@ class Goldmate_Admin {
 				Goldmate_Shortcodes::render_admin_tab();
 			} elseif ( 'components' === $tab ) {
 				Goldmate_Components::render_admin_tab();
+			} elseif ( 'appearance' === $tab ) {
+				Goldmate_Appearance::render_admin_tab();
 			} elseif ( 'fetch' === $tab ) {
 				self::render_fetch_items_tab();
 			} elseif ( 'formulas' === $tab ) {

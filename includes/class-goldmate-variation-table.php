@@ -30,12 +30,80 @@ class Goldmate_Variation_Table {
 	);
 
 	/**
+	 * Attribute labels starting with this mark the weight attribute.
+	 */
+	const WEIGHT_LABEL = 'وزن';
+
+	/**
 	 * Registers the reload endpoint and the accordion pointer.
 	 */
 	public static function init() {
 
 		add_action( 'wp_ajax_goldmate_variation_table', array( __CLASS__, 'ajax_table' ) );
 		add_action( 'woocommerce_variation_options_pricing', array( __CLASS__, 'render_accordion_pointer' ), 10, 3 );
+
+		// Before Goldmate_Pricing (priority 20) prices the new variation.
+		add_action( 'woocommerce_new_product_variation', array( __CLASS__, 'fill_weight_from_attribute' ), 10 );
+	}
+
+	/**
+	 * The weight a variation's weight attribute names, e.g. "3.049 گرم" => 3.049.
+	 *
+	 * @param WC_Product_Variation|int $variation Variation or its ID.
+	 * @return float|null Null when no weight attribute carries a positive number.
+	 */
+	public static function attribute_weight( $variation ) {
+
+		$variation = $variation instanceof WC_Product_Variation ? $variation : wc_get_product( $variation );
+
+		if ( ! $variation instanceof WC_Product_Variation ) {
+			return null;
+		}
+
+		$parent = wc_get_product( $variation->get_parent_id() );
+
+		foreach ( $variation->get_attributes() as $name => $value ) {
+
+			$label = trim( wc_attribute_label( $name, $parent ? $parent : '' ) );
+
+			if ( '' === (string) $value || 0 !== strpos( $label, self::WEIGHT_LABEL ) ) {
+				continue;
+			}
+
+			// Taxonomy attributes store the term slug; the number lives in the term name.
+			if ( taxonomy_exists( $name ) ) {
+				$term  = get_term_by( 'slug', $value, $name );
+				$value = $term ? $term->name : '';
+			}
+
+			$text = str_replace( ',', '.', goldmate_normalize_digits( urldecode( (string) $value ) ) );
+
+			if ( preg_match( '/\d+(?:\.\d+)?/', $text, $match ) && (float) $match[0] > 0 ) {
+				return (float) $match[0];
+			}
+		}
+
+		return null;
+	}
+
+	/**
+	 * Sets a variation's weight from its weight attribute when it has none.
+	 *
+	 * A weight typed in the table is never overwritten.
+	 *
+	 * @param int $variation_id Variation ID.
+	 */
+	public static function fill_weight_from_attribute( $variation_id ) {
+
+		if ( '' !== trim( (string) get_post_meta( $variation_id, '_goldmate_weight', true ) ) ) {
+			return;
+		}
+
+		$weight = self::attribute_weight( $variation_id );
+
+		if ( null !== $weight ) {
+			update_post_meta( $variation_id, '_goldmate_weight', $weight );
+		}
 	}
 
 	/**
@@ -156,7 +224,7 @@ class Goldmate_Variation_Table {
 							<input type="hidden" name="<?php echo esc_attr( $name ); ?>[present]" value="1">
 						</td>
 						<td>
-							<input type="number" name="<?php echo esc_attr( $name ); ?>[weight]" value="<?php echo esc_attr( get_post_meta( $id, '_goldmate_weight', true ) ); ?>" step="0.001" min="0">
+							<input type="number" name="<?php echo esc_attr( $name ); ?>[weight]" value="<?php echo esc_attr( get_post_meta( $id, '_goldmate_weight', true ) ); ?>" placeholder="<?php echo esc_attr( (string) self::attribute_weight( $variation ) ); ?>" step="0.001" min="0">
 						</td>
 						<td>
 							<select name="<?php echo esc_attr( $name ); ?>[karat]">
@@ -265,7 +333,8 @@ class Goldmate_Variation_Table {
 	}
 
 	/**
-	 * Saves the posted rows onto the variations.
+	 * Saves the posted rows onto the variations, then fills any variation still
+	 * without a weight from its weight attribute.
 	 *
 	 * Runs from Goldmate_Product_Fields::save_product_object(), before the
 	 * product saves and Goldmate_Pricing reprices its variations.
@@ -274,8 +343,27 @@ class Goldmate_Variation_Table {
 	 */
 	public static function save( $product ) {
 
+		if ( ! $product->is_type( 'variable' ) ) {
+			return;
+		}
+
+		self::save_rows( $product );
+
+		// Variations made after the table was drawn, and rows left empty.
+		foreach ( self::variation_ids( $product->get_id() ) as $id ) {
+			self::fill_weight_from_attribute( $id );
+		}
+	}
+
+	/**
+	 * Writes the posted table rows onto the variations.
+	 *
+	 * @param WC_Product $product Parent product.
+	 */
+	protected static function save_rows( $product ) {
+
 		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- WC verifies before this hook.
-		if ( ! $product->is_type( 'variable' ) || ! isset( $_POST[ self::FIELD ] ) || ! is_array( $_POST[ self::FIELD ] ) ) {
+		if ( ! isset( $_POST[ self::FIELD ] ) || ! is_array( $_POST[ self::FIELD ] ) ) {
 			return;
 		}
 

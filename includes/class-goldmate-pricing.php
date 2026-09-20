@@ -20,17 +20,15 @@ class Goldmate_Pricing {
 	protected static $in_progress = array();
 
 	/**
-	 * Parent IDs already repriced during this request, keyed by ID.
+	 * Successful child calculation signatures, keyed by variation ID.
 	 *
-	 * `$in_progress` only covers re-entry on the same stack. Pricing the children
-	 * saves each one, and WooCommerce queues the parent for a deferred sync on
-	 * every child save. That queue is walked on `shutdown`, long after the guard
-	 * has been released, and each sync saves the parent, which brings us back
-	 * here to save the children again and queue the parent again. The queue grows
-	 * faster than it drains and the request dies on the execution-time limit.
-	 * Pricing a parent at most once per request breaks that cycle.
+	 * Child saves queue deferred parent syncs after $in_progress is released.
+	 * Skip a repeated calculation only while its stored prices still match.
+	 * Unlike a once-per-parent flag, this permits new children and changed
+	 * inputs/rates later in the same request without a deferred save loop.
+	 * Failed writes are never recorded, so they remain retryable.
 	 *
-	 * @var array<int,bool>
+	 * @var array<int,string>
 	 */
 	protected static $repriced = array();
 
@@ -119,15 +117,11 @@ class Goldmate_Pricing {
 			return false;
 		}
 
-		if ( isset( self::$repriced[ $parent_id ] ) ) {
-			return false;
-		}
-
-		self::$repriced[ $parent_id ] = true;
-
 		$children = $parent->get_children();
 
 		if ( empty( $children ) ) {
+			// Not marked yet: a product saved before its variations exist must
+			// be priceable later in the same request, once the children exist.
 			return false;
 		}
 
@@ -148,7 +142,20 @@ class Goldmate_Pricing {
 
 				$variation = wc_get_product( $variation_id );
 
+				// Deferred parent syncs must not save identical children again.
+				// Include the full breakdown so changed weights/rates/audit data
+				// can be written again within this same request.
+				$signature = md5( serialize( array( $breakdown, goldmate_option( 'goldmate_wc_tax_status' ) ) ) );
+				if ( $variation && isset( self::$repriced[ $variation_id ] )
+					&& self::$repriced[ $variation_id ] === $signature
+					&& (float) $variation->get_regular_price( 'edit' ) === (float) $breakdown['total']
+					&& (float) $variation->get_price( 'edit' ) === (float) $breakdown['total']
+					&& '' === $variation->get_sale_price( 'edit' ) ) {
+					continue;
+				}
+
 				if ( $variation && self::write_price( $variation, $breakdown ) ) {
+					self::$repriced[ $variation_id ] = $signature;
 					$count++;
 				}
 			}

@@ -41,6 +41,12 @@
 			return fromVariation;
 		}
 
+		// No variation chosen yet: the page only shows a price range, and
+		// adding the accessory to its low end is not a price anyone pays.
+		if ($form.hasClass('variations_form')) {
+			return null;
+		}
+
 		var $root = $form.find('.goldmate-accessories');
 		var attr = $root.attr('data-base-price');
 		if (attr !== undefined && attr !== '') {
@@ -70,11 +76,12 @@
 
 	function updateTotal($root) {
 		var $form = $root.closest('form.cart');
-		var total = basePrice($form) + accessorySum($root);
+		var base = basePrice($form);
+		var total = base + accessorySum($root);
 		var $box = $root.find('.goldmate-accessory-total');
 		var label = (window.goldmateAccessories && goldmateAccessories.i18n && goldmateAccessories.i18n.total) || '';
 
-		if (accessorySum($root) <= 0) {
+		if (base === null || accessorySum($root) <= 0) {
 			$box.attr('hidden', 'hidden');
 			return;
 		}

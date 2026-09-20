@@ -1,0 +1,723 @@
+/**
+ * GoldMate product-page UI: variation trigger buttons, the choice dialog and
+ * the weight row. Namespaced .goldmate-vd-* so it never collides with the
+ * theme's own swatch styles, which stay in the page (hidden) underneath.
+ *
+ * Every colour/size below is a custom property. The defaults here are
+ * overridden from GoldMate > Appearance (printed inline after this file), so
+ * do not edit values in this file for a per-store look.
+ */
+
+:root {
+	--goldmate-vd-accent: #b8872b;
+	--goldmate-vd-accent-tint: rgba(184, 135, 43, .1);
+	--goldmate-vd-ink: #1c1a17;
+	--goldmate-vd-muted: #8a8478;
+	--goldmate-vd-border: #eae6dd;
+	--goldmate-vd-surface: #fff;
+	--goldmate-vd-row-bg: #faf9f7;
+	--goldmate-vd-overlay: rgba(24, 20, 14, .5);
+	--goldmate-vd-radius: 20px;
+	--goldmate-vd-trigger-radius: 16px;
+	--goldmate-vd-price: var(--goldmate-vd-accent);
+}
+
+@supports (background: color-mix(in srgb, red, red)) {
+	:root {
+		--goldmate-vd-accent-tint: color-mix(in srgb, var(--goldmate-vd-accent) 10%, transparent);
+	}
+}
+
+.variations_form .variations select {
+    visibility: hidden !important;
+}
+
+.goldmate-vd-enhanced select,
+.goldmate-vd-enhanced .wd-swatches-product {
+	position: absolute !important;
+	width: 1px !important;
+	height: 1px !important;
+	padding: 0 !important;
+	margin: -1px !important;
+	overflow: hidden !important;
+	clip: rect(0, 0, 0, 0) !important;
+	white-space: nowrap !important;
+	border: 0 !important;
+}
+
+/* Trigger button */
+
+/* button.goldmate-vd-* (element + class) beats the theme's global
+ *    :is(.btn, .button, button, ...) reset, which ties on specificity with a
+ *    plain class selector and wins that tie by loading after this file. */
+.variations_form table.variations,
+.variations_form table.variations tbody {
+	display: block;
+	width: 100%;
+}
+
+button.goldmate-vd-trigger {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: .85em;
+	box-sizing: border-box;
+	width: 100% !important;
+	max-width: none !important;
+	min-width: 0;
+	padding: .8em .8em .8em 1.1em;
+	background: var(--goldmate-vd-surface);
+	border: 1.5px solid var(--goldmate-vd-border);
+	border-radius: var(--goldmate-vd-trigger-radius);
+	box-shadow: 0 1px 2px rgba(28, 26, 23, .04);
+	appearance: none;
+	font: inherit;
+	color: var(--goldmate-vd-ink);
+	text-align: start;
+	text-transform: none;
+	cursor: pointer;
+	transition: border-color .18s ease, box-shadow .18s ease, transform .08s ease;
+}
+
+.goldmate-vd-trigger:hover {
+	border-color: var(--goldmate-vd-accent);
+	box-shadow: 0 6px 18px rgba(28, 26, 23, .08);
+}
+
+.goldmate-vd-trigger:active {
+	transform: scale(.985);
+}
+
+.goldmate-vd-trigger:focus-visible {
+	outline: 2px solid var(--goldmate-vd-accent);
+	outline-offset: 2px;
+}
+
+.goldmate-vd-trigger::after {
+	content: "";
+	flex: 0 0 auto;
+	width: 1.9em;
+	height: 1.9em;
+	border-radius: 50%;
+	background-color: var(--goldmate-vd-accent-tint);
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%233f3f46' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+	background-repeat: no-repeat;
+	background-position: center;
+	background-size: 16px 16px;
+	transition: transform .18s ease;
+}
+
+.goldmate-vd-trigger:hover::after {
+	transform: translateY(2px);
+}
+
+.goldmate-vd-trigger.is-loading {
+	pointer-events: none;
+	cursor: wait;
+}
+
+.goldmate-vd-trigger.is-loading::after {
+	box-sizing: border-box;
+	background-color: transparent;
+	background-image: none;
+	border: 2px solid var(--goldmate-vd-border);
+	border-top-color: var(--goldmate-vd-accent);
+	animation: goldmate-vd-spin .55s linear infinite;
+}
+
+.goldmate-vd-trigger.is-loading:hover::after {
+	transform: none;
+}
+
+@keyframes goldmate-vd-spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+
+.variations_form .variations tr {
+	display: flex;
+	align-items: center;
+	width: 100%;
+}
+
+.variations_form .variations tr.goldmate-vd-clean-row {
+	display: block;
+	width: 100%;
+	border: 0 !important;
+}
+
+.variations_form .variations tr.goldmate-vd-clean-row > td,
+.variations_form .variations tr.goldmate-vd-clean-row > th {
+	border: 0 !important;
+}
+
+.variations_form .variations tr.goldmate-vd-clean-row > th.label,
+.variations_form .variations tr.goldmate-vd-clean-row .wd-attr-label,
+.variations_form .variations tr.goldmate-vd-clean-row .wd-attr-name {
+	display: none !important;
+}
+
+.variations_form .variations tr.goldmate-vd-clean-row > td.value,
+.variations_form .goldmate-vd-enhanced {
+	display: block !important;
+	box-sizing: border-box;
+	width: 100% !important;
+	max-width: none !important;
+	padding-top: 14px;
+	padding-bottom: 14px;
+	padding-left: 0 !important;
+	padding-right: 0 !important;
+	padding-inline: 0 !important;
+}
+
+.variations_form .variations tr.goldmate-vd-clean-row .goldmate-vd-trigger {
+	width: 100% !important;
+}
+
+.single-product .summary:has(.goldmate-vd-trigger) .woocommerce-product-attributes.shop_attributes {
+	display: none !important;
+}
+
+.goldmate-vd-heading {
+	margin: 0 0 10px;
+	padding: 0;
+	font-size: 13px;
+	font-weight: 400;
+	line-height: 1.4;
+	color: var(--goldmate-vd-muted);
+	text-align: start;
+}
+
+.goldmate-vd-trigger-text,
+.goldmate-vd-trigger-name {
+	display: none;
+}
+
+.goldmate-vd-trigger-value,
+.goldmate-vd-trigger-label {
+	overflow: hidden;
+	min-width: 0;
+	flex: 1 1 auto;
+	font-size: 14px;
+	font-weight: 600;
+	color: var(--goldmate-vd-ink);
+	line-height: 1.4;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.goldmate-vd-placeholder .goldmate-vd-trigger-value,
+.goldmate-vd-placeholder .goldmate-vd-trigger-label {
+	color: var(--goldmate-vd-muted);
+	font-weight: 400;
+}
+
+.goldmate-vd-gold-price {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	margin-top: 10px;
+	padding: 0 4px;
+	font-size: 12px;
+	line-height: 1.5;
+	color: var(--goldmate-vd-muted);
+}
+
+.goldmate-vd-gold-price-label,
+.goldmate-vd-gold-price-unit,
+.goldmate-vd-gold-price-value .woocommerce-Price-currencySymbol {
+	font-size: 10px;
+	font-weight: 400;
+	color: var(--goldmate-vd-muted);
+}
+
+.goldmate-vd-gold-price-value,
+.goldmate-vd-gold-price .woocommerce-Price-amount {
+	color: var(--goldmate-vd-muted);
+	font-size: 12px;
+	font-weight: 400;
+}
+
+.goldmate-vd-trigger-price {
+	flex: 0 1 auto;
+	font-weight: 700;
+	font-size: .95em;
+	color: var(--goldmate-vd-price);
+	white-space: nowrap;
+	text-align: end;
+}
+
+/* price_html comes straight from WooCommerce  neutralize the theme's own
+ *    price styling inside our badges so our color/weight always wins. */
+.goldmate-vd-trigger-price .price,
+.goldmate-vd-trigger-price .woocommerce-Price-amount,
+.goldmate-vd-row-price .price,
+.goldmate-vd-row-price .woocommerce-Price-amount {
+	color: inherit !important;
+	font-size: inherit !important;
+	font-weight: inherit !important;
+}
+
+/* Overlay + dialog shell */
+
+.goldmate-vd-overlay {
+	position: fixed;
+	inset: 0;
+	z-index: 100000;
+	display: flex;
+	align-items: flex-end;
+	justify-content: center;
+	background: var(--goldmate-vd-overlay);
+	backdrop-filter: blur(4px);
+	-webkit-backdrop-filter: blur(4px);
+	opacity: 0;
+	visibility: hidden;
+	transition: opacity .22s ease, visibility 0s linear .22s;
+}
+
+.goldmate-vd-overlay.is-open {
+	opacity: 1;
+	visibility: visible;
+	transition: opacity .22s ease;
+}
+
+@media (min-width: 769px) {
+	.goldmate-vd-overlay {
+		align-items: center;
+	}
+}
+
+html.goldmate-vd-locked,
+html.goldmate-vd-locked body {
+	overflow: hidden;
+}
+
+.goldmate-vd-modal {
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	width: 100%;
+	max-width: 440px;
+	max-height: 82vh;
+	background: var(--goldmate-vd-surface);
+	border-radius: var(--goldmate-vd-radius) var(--goldmate-vd-radius) 0 0;
+	box-shadow: 0 -16px 48px rgba(28, 22, 12, .16);
+	transform: translateY(28px);
+	transition: transform .28s cubic-bezier(.22, 1, .36, 1);
+}
+
+.goldmate-vd-overlay.is-open .goldmate-vd-modal {
+	transform: translateY(0);
+}
+
+.goldmate-vd-modal::before {
+	content: "";
+	position: absolute;
+	top: 10px;
+	inset-inline-start: 50%;
+	width: 36px;
+	height: 4px;
+	background: var(--goldmate-vd-border);
+	border-radius: 999px;
+	transform: translateX(-50%);
+}
+
+@media (min-width: 769px) {
+	.goldmate-vd-modal {
+		margin: 0 16px;
+		border-radius: var(--goldmate-vd-radius);
+		box-shadow: 0 28px 80px rgba(28, 22, 12, .26);
+		transform: translateY(0) scale(.96);
+	}
+	
+	.goldmate-vd-overlay.is-open .goldmate-vd-modal {
+		transform: translateY(0) scale(1);
+	}
+	
+	.goldmate-vd-modal::before {
+		content: none;
+	}
+}
+
+.goldmate-vd-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 1em;
+	padding: 1.4em 1.35em 1.05em;
+	border-bottom: 1px solid var(--goldmate-vd-border);
+	flex: 0 0 auto;
+}
+
+.goldmate-vd-title {
+	font-weight: 800;
+	font-size: 1.1em;
+	color: var(--goldmate-vd-ink);
+	letter-spacing: -.01em;
+}
+
+button.goldmate-vd-close {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex: 0 0 auto;
+	width: 34px;
+	height: 34px;
+	min-width: 0;
+	min-height: 0;
+	padding: 0;
+	background: #f5f3ef;
+	border: 0;
+	border-radius: 50%;
+	appearance: none;
+	font-size: 0;
+	color: var(--goldmate-vd-muted);
+	cursor: pointer;
+	transition: background .15s ease, color .15s ease, transform .08s ease;
+}
+
+.goldmate-vd-close::before {
+	content: "";
+	width: 13px;
+	height: 13px;
+	background-color: currentColor;
+	-webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.4' stroke-linecap='round'%3E%3Cline x1='6' y1='6' x2='18' y2='18'%3E%3C/line%3E%3Cline x1='18' y1='6' x2='6' y2='18'%3E%3C/line%3E%3C/svg%3E") center / contain no-repeat;
+	mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.4' stroke-linecap='round'%3E%3Cline x1='6' y1='6' x2='18' y2='18'%3E%3C/line%3E%3Cline x1='18' y1='6' x2='6' y2='18'%3E%3C/line%3E%3C/svg%3E") center / contain no-repeat;
+}
+
+.goldmate-vd-close:hover {
+	background: #efece5;
+	color: var(--goldmate-vd-ink);
+}
+
+.goldmate-vd-close:active {
+	transform: scale(.92);
+}
+
+.goldmate-vd-close:focus-visible {
+	outline: 2px solid var(--goldmate-vd-accent);
+	outline-offset: 2px;
+}
+
+.goldmate-vd-list {
+	overflow-y: auto;
+	flex: 1 1 auto;
+	padding: 1em .9em 1.1em;
+	scrollbar-width: thin;
+}
+
+.goldmate-vd-list::-webkit-scrollbar {
+	width: 6px;
+}
+
+.goldmate-vd-list::-webkit-scrollbar-thumb {
+	background: var(--goldmate-vd-border);
+	border-radius: 999px;
+}
+
+button.goldmate-vd-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 1em;
+	width: 100%;
+	margin-block-end: .5em;
+	padding: .95em 1em;
+	background: var(--goldmate-vd-row-bg);
+	border: 1.5px solid transparent;
+	border-radius: 14px;
+	appearance: none;
+	font: inherit;
+	color: var(--goldmate-vd-ink);
+	text-align: start;
+	text-transform: none;
+	cursor: pointer;
+	transition: background .15s ease, border-color .15s ease, transform .08s ease, box-shadow .15s ease;
+}
+
+.goldmate-vd-row:last-child {
+	margin-block-end: 0;
+}
+
+.goldmate-vd-row:hover:not(.is-disabled) {
+	background: #f3f1ec;
+}
+
+.goldmate-vd-row:active:not(.is-disabled) {
+	transform: scale(.985);
+}
+
+.goldmate-vd-row:focus-visible {
+	outline: 2px solid var(--goldmate-vd-accent);
+	outline-offset: 2px;
+}
+
+.goldmate-vd-row-label {
+	display: flex;
+	align-items: center;
+	gap: .75em;
+	font-weight: 600;
+}
+
+.goldmate-vd-row-label::before {
+	content: "";
+	flex: 0 0 auto;
+	width: 1.2em;
+	height: 1.2em;
+	border: 2px solid #dcd8cf;
+	border-radius: 50%;
+	background: #fff;
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23fff' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='5 13 10 18 19 7'%3E%3C/polyline%3E%3C/svg%3E");
+	background-repeat: no-repeat;
+	background-position: center;
+	background-size: 0;
+	transition: border-color .15s ease, background-color .15s ease, background-size .15s ease;
+}
+
+.goldmate-vd-row.is-selected {
+	background: var(--goldmate-vd-accent-tint);
+	border-color: var(--goldmate-vd-accent);
+	box-shadow: 0 4px 14px var(--goldmate-vd-accent-tint);
+}
+
+.goldmate-vd-row.is-selected .goldmate-vd-row-label::before {
+	border-color: var(--goldmate-vd-accent);
+	background-color: var(--goldmate-vd-accent);
+	background-size: 62%;
+}
+
+.goldmate-vd-row.is-disabled {
+	cursor: not-allowed;
+}
+
+.goldmate-vd-row.is-disabled .goldmate-vd-row-label {
+	color: var(--goldmate-vd-muted);
+}
+
+.goldmate-vd-row.is-disabled .goldmate-vd-row-label::before {
+	border-color: var(--goldmate-vd-border);
+	background: var(--goldmate-vd-border);
+}
+
+.goldmate-vd-row-price {
+	flex: 0 0 auto;
+	padding: .35em .85em;
+	background: #fff;
+	border: 1px solid var(--goldmate-vd-border);
+	border-radius: 999px;
+	font-weight: 700;
+	font-size: .9em;
+	color: var(--goldmate-vd-price);
+	white-space: nowrap;
+}
+
+.goldmate-vd-row.is-selected .goldmate-vd-row-price {
+	background: #fff;
+	border-color: transparent;
+}
+
+.goldmate-vd-row-unavailable {
+	padding: .35em .8em;
+	background: #fbeeec;
+	border: 1px solid transparent;
+	border-radius: 999px;
+	font-weight: 600;
+	font-size: .85em;
+	color: #b3452f;
+}
+.goldmate-weight-row,
+.goldmate-weight-row > th,
+.goldmate-weight-row > td {
+	border-top: 0 !important;
+	border-bottom: 0 !important;
+	box-shadow: none !important;
+}
+
+.goldmate-weight-option.goldmate-weight-disabled {
+	opacity: .45;
+	cursor: not-allowed !important;
+}
+
+.goldmate-weight-modal {
+	display: none;
+}
+
+.goldmate-weight-modal.goldmate-weight-modal-open {
+	display: block;
+}
+
+.goldmate-weight-modal-body-open {
+	overflow: hidden;
+}
+
+.goldmate-simple-weight {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	margin-bottom: 15px;
+}
+
+.goldmate-simple-weight-label {
+	font-weight: 600;
+}
+
+.goldmate-simple-weight-value {
+	font-weight: 500;
+}
+/* GOLDMATE: HIDDEN PRODUCT-FORM PARTS
+ * Hidden in CSS, not only by script: WooCommerce redraws and slides these open
+ * on every choice, so a script-only hide lets them push the form down first. */
+.variations_form .wd-reset-var,
+.variations_form .reset_variations,
+.variations_form .woocommerce-variation-price,
+.variations_form .variations tr.goldmate-vd-native-weight-hidden,
+.goldmate-accessory-group.goldmate-vd-enhanced > .goldmate-accessory-label {
+	display: none !important;
+}
+
+/* GOLDMATE: PRODUCT ACTION BUTTONS
+ * Compare and wishlist render as buttons, and add-to-cart gets an icon (a span
+ * added by product-ui.js; the theme keeps ::before/::after for its loader). Colours
+ * come from the same custom properties as the chooser; per-button overrides are
+ * printed after this file from GoldMate > Appearance. */
+
+:root {
+	--goldmate-atc-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='9' cy='20' r='1.5'/%3E%3Ccircle cx='18' cy='20' r='1.5'/%3E%3Cpath d='M2 3h3l2.6 12.4a2 2 0 0 0 2 1.6h8.2a2 2 0 0 0 2-1.5L21.5 7H6'/%3E%3C/svg%3E");
+}
+
+.single-product .summary form.cart .single_add_to_cart_button {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: .55em;
+}
+
+.single-product .summary form.cart .single_add_to_cart_button > .goldmate-atc-icon {
+	display: inline-block;
+	flex: 0 0 auto;
+	width: 1.25em;
+	height: 1.25em;
+	background-color: currentColor;
+	-webkit-mask: var(--goldmate-atc-icon) center / contain no-repeat;
+	mask: var(--goldmate-atc-icon) center / contain no-repeat;
+	pointer-events: none;
+}
+
+.single-product .summary .wd-wishlist-btn,
+.single-product .summary .wd-compare-btn {
+	display: inline-block;
+	margin-inline-end: 8px;
+	margin-bottom: 8px;
+}
+
+.single-product .summary .wd-wishlist-btn > a,
+.single-product .summary .wd-compare-btn > a {
+	display: inline-flex;
+	align-items: center;
+	gap: .5em;
+	box-sizing: border-box;
+	padding: .6em 1.1em;
+	background: var(--goldmate-vd-surface);
+	border: 1.5px solid var(--goldmate-vd-border);
+	border-radius: var(--goldmate-vd-trigger-radius);
+	font-size: 13px;
+	font-weight: 600;
+	line-height: 1.4;
+	color: var(--goldmate-vd-ink);
+	text-decoration: none;
+	transition: border-color .18s ease, color .18s ease, background-color .18s ease, transform .08s ease;
+}
+
+.single-product .summary .wd-wishlist-btn > a:hover,
+.single-product .summary .wd-compare-btn > a:hover {
+	border-color: var(--goldmate-vd-accent);
+	color: var(--goldmate-vd-accent);
+}
+
+.single-product .summary .goldmate-action-row {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	margin-bottom: 8px;
+}
+
+.single-product .summary .goldmate-action-row > .wd-wishlist-btn,
+.single-product .summary .goldmate-action-row > .wd-compare-btn {
+	margin: 0;
+}
+
+.single-product .summary .wd-wishlist-btn > a:active,
+.single-product .summary .wd-compare-btn > a:active {
+	transform: scale(.97);
+}
+
+/* Cart row: final price + quantity on top, add-to-cart full width below.
+ * "Quantity beside the button" is a choice in GoldMate > Appearance. */
+
+.single-product .summary form.cart:not(.variations_form),
+.single-product .summary form.cart .woocommerce-variation-add-to-cart {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 12px;
+}
+
+.single-product .summary form.cart .goldmate-accessories {
+	flex: 0 0 100%;
+	order: 0;
+}
+
+.single-product .summary form.cart .goldmate-final-price {
+	display: flex;
+	flex: 1 1 auto;
+	flex-direction: column;
+	gap: 2px;
+	order: 1;
+	min-width: 0;
+}
+
+.single-product .summary form.cart .goldmate-final-price[hidden] {
+	display: none;
+}
+
+.goldmate-final-price-label {
+	font-size: 12px;
+	line-height: 1.4;
+	color: var(--goldmate-vd-muted);
+}
+
+.goldmate-final-price-amount {
+	white-space: nowrap;
+}
+
+.goldmate-final-price-amount,
+.goldmate-final-price-amount .woocommerce-Price-amount,
+.goldmate-final-price-amount .amount {
+	font-size: 20px;
+	font-weight: 800;
+	line-height: 1.3;
+	color: var(--goldmate-vd-ink);
+}
+
+.goldmate-final-price-amount del,
+.goldmate-final-price-amount del .amount {
+	font-size: 13px;
+	font-weight: 400;
+	color: var(--goldmate-vd-muted);
+}
+
+.single-product .summary form.cart .quantity {
+	order: 2;
+	margin-inline-start: auto;
+	margin-inline-end: 0;
+}
+
+.single-product .summary form.cart .single_add_to_cart_button {
+	order: 3;
+	flex: 0 0 100%;
+	width: 100%;
+	min-height: 52px;
+	margin: 0;
+}

@@ -65,6 +65,13 @@ Everything lives under the top-level **قیمت طلا** menu:
   age, staleness threshold and what to do when the rate goes stale).
 - **وضعیت و ابزارها** — current state, background-job progress, a manual rebuild, a
   dry-run fetch, and the rate history.
+- **ظاهر و استایل** — colours, shapes and sizes for the product page's size/weight
+  selectors and their modal, the add-to-cart, buy-now, quantity and wishlist/compare
+  buttons, plus a custom CSS box. A blank field keeps the stylesheet default, and
+  بازگرداندن به پیش‌فرض clears every override. The look itself ships in
+  `assets/css/product-ui.css` and `assets/js/product-ui.js`; these replace the copy
+  that used to live in the theme's Custom CSS/JS, which must be emptied on any site
+  that still carries it.
 
 The old WooCommerce settings tab now only links here.
 
