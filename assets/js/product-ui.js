@@ -2941,6 +2941,104 @@
 	|
 	*/
 
+	/*
+	 * Small (i) button beside the final-price label with a floating popover
+	 * explaining how the price is built. Hover or focus previews it; a click
+	 * pins it open until an outside click or Esc. Text comes from the
+	 * appearance tab (empty = no icon).
+	 */
+	var priceInfoSeq = 0;
+
+	// Icon choices from the appearance tab; '' keeps the letter "i".
+	var priceInfoIcons = {
+		info: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>',
+		info_fill: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm1 15h-2v-6h2zm0-8h-2V7h2z"/></svg>',
+		question: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>'
+	};
+
+	function setupPriceInfo($box) {
+
+		var config = window.goldmateProductUiConfig || {};
+		var text = config.priceInfo ? String(config.priceInfo) : '';
+
+		if (!text) {
+			return;
+		}
+
+		var popId = 'goldmate-price-info-' + (++priceInfoSeq);
+		var $label = $box.find('.goldmate-final-price-label');
+		var $btn = $('<button type="button" class="goldmate-price-info-btn" aria-expanded="false">i</button>');
+		var $pop = $('<span class="goldmate-price-info-pop" role="tooltip" hidden></span>').attr('id', popId).text(text);
+
+		$btn.attr('aria-label', config.priceInfoLabel || '').attr('aria-describedby', popId);
+
+		if (priceInfoIcons[config.priceInfoIcon]) {
+			$btn.addClass('is-svg').html(priceInfoIcons[config.priceInfoIcon]);
+		}
+
+		$label.wrap('<span class="goldmate-final-price-head"></span>');
+		$label.after($btn);
+
+		var $head = $box.find('.goldmate-final-price-head');
+		var pinned = false;
+		var canHover = 'click' !== config.priceInfoTrigger && window.matchMedia && window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+
+		$head.append($pop);
+
+		// Point the arrow at the button: offset from the head's inline start.
+		function placeArrow() {
+			var head = $head[0].getBoundingClientRect();
+			var btn = $btn[0].getBoundingClientRect();
+			var center = btn.left + btn.width / 2;
+			var rtl = 'rtl' === $head.css('direction');
+			$pop[0].style.setProperty('--goldmate-info-arrow', Math.round(rtl ? head.right - center : center - head.left) + 'px');
+		}
+
+		function show(open) {
+			$btn.attr('aria-expanded', open ? 'true' : 'false');
+			if (open) {
+				$pop.removeAttr('hidden');
+				placeArrow();
+			} else {
+				pinned = false;
+				$pop.attr('hidden', 'hidden');
+			}
+		}
+
+		$btn.on('click', function (event) {
+			event.preventDefault();
+			event.stopPropagation();
+			pinned = !pinned || $pop.is('[hidden]');
+			show(pinned);
+		}).on('focus', function () {
+			show(true);
+		}).on('blur', function () {
+			if (!pinned) {
+				show(false);
+			}
+		});
+
+		if (canHover) {
+			$head.on('mouseenter', function () {
+				show(true);
+			}).on('mouseleave', function () {
+				if (!pinned && !$btn.is(':focus')) {
+					show(false);
+				}
+			});
+		}
+
+		$(document).on('click', function (event) {
+			if (!$(event.target).closest($head).length) {
+				show(false);
+			}
+		}).on('keydown', function (event) {
+			if ('Escape' === event.key && !$pop.is('[hidden]')) {
+				show(false);
+			}
+		});
+	}
+
 	function setupFinalPrice($form) {
 
 		if ($form.find('.goldmate-final-price').length) {
@@ -2957,6 +3055,8 @@
 		var $box = $('<div class="goldmate-final-price" hidden><span class="goldmate-final-price-label"></span><span class="goldmate-final-price-amount"></span></div>');
 
 		$box.find('.goldmate-final-price-label').text(I18N.finalPrice);
+
+		setupPriceInfo($box);
 
 		if ($qty.length) {
 			$qty.before($box);

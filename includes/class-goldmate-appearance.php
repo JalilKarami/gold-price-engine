@@ -18,6 +18,8 @@ class Goldmate_Appearance {
 
 	const CUSTOM_CSS_KEY = 'custom_css';
 
+	const PRICE_INFO_DEFAULT = 'وزن طلا × (قیمت روز طلا + اجرت) + 7٪ سود + متعلقات + 9٪ مالیات سود و اجرت';
+
 	/**
 	 * Registers front-end assets and the admin colour picker.
 	 */
@@ -97,6 +99,62 @@ class Goldmate_Appearance {
 					'trigger_weight' => array( 'label' => 'ضخامت متن', 'type' => 'select', 'options' => $weights, 'rules' => array( array( '.goldmate-vd-trigger-value, .goldmate-vd-trigger-label', 'font-weight' ) ) ),
 					'trigger_height' => array( 'label' => 'حداقل ارتفاع (px)', 'type' => 'px', 'rules' => array( array( 'button.goldmate-vd-trigger', 'min-height' ) ), 'max' => 120 ),
 					'trigger_hover'  => array( 'label' => 'رنگ حاشیه هنگام قرارگیری ماوس', 'type' => 'color', 'rules' => array( array( 'button.goldmate-vd-trigger:hover', 'border-color' ) ) ),
+				),
+			),
+
+			'price_info' => array(
+				'title'  => 'راهنمای قیمت نهایی',
+				'desc'   => 'آیکون کوچک کنار عنوان «قیمت نهایی» بالای دکمه خرید؛ با قرار گرفتن ماوس یا کلیک روی آن، این متن در یک پنجره کوچک نمایش داده می‌شود. خالی گذاشتن متن یعنی همان متن پیش‌فرض.',
+				'fields' => array(
+					'price_info_text'    => array( 'label' => 'متن راهنما', 'type' => 'textarea', 'default' => self::PRICE_INFO_DEFAULT ),
+					'price_info_hide'    => array( 'label' => 'مخفی کردن آیکون راهنما', 'type' => 'checkbox' ),
+					'price_info_icon'    => array(
+						'label'   => 'شکل آیکون',
+						'type'    => 'select',
+						'options' => array(
+							''          => 'حرف i در دایره (پیش‌فرض)',
+							'info'      => 'آیکون اطلاعات',
+							'info_fill' => 'آیکون اطلاعات توپر',
+							'question'  => 'علامت سوال',
+						),
+					),
+					'price_info_trigger' => array(
+						'label'   => 'نحوه باز شدن',
+						'type'    => 'select',
+						'options' => array(
+							''      => 'ماوس و کلیک (پیش‌فرض)',
+							'click' => 'فقط با کلیک',
+						),
+					),
+					'price_info_color'   => array( 'label' => 'رنگ آیکون', 'type' => 'color', 'var' => '--goldmate-info-icon' ),
+					'price_info_color_h' => array( 'label' => 'رنگ آیکون هنگام قرارگیری ماوس', 'type' => 'color', 'var' => '--goldmate-info-icon-h' ),
+					'price_info_size'    => array( 'label' => 'اندازه آیکون (px)', 'type' => 'px', 'var' => '--goldmate-info-size', 'max' => 40 ),
+				),
+			),
+
+			'price_info_pop' => array(
+				'title'  => 'پنجره راهنمای قیمت',
+				'desc'   => 'ظاهر پنجره‌ای که با آیکون راهنما باز می‌شود. خالی گذاشتن هر فیلد یعنی همان ظاهر پیش‌فرض (رنگ‌های بخش «رنگ‌ها و شکل کلی»).',
+				'fields' => array(
+					'pop_shadow' => array(
+						'label'   => 'سایه',
+						'type'    => 'select',
+						'options' => array(
+							''       => 'ملایم (پیش‌فرض)',
+							'strong' => 'پررنگ',
+							'none'   => 'بدون سایه',
+						),
+						'map'     => array(
+							'strong' => ':root{--goldmate-info-shadow:0 10px 30px rgba(28,26,23,.25)}',
+							'none'   => ':root{--goldmate-info-shadow:none}',
+						),
+					),
+					'pop_bg'     => array( 'label' => 'رنگ پس‌زمینه', 'type' => 'color', 'var' => '--goldmate-info-bg' ),
+					'pop_color'  => array( 'label' => 'رنگ متن', 'type' => 'color', 'var' => '--goldmate-info-ink' ),
+					'pop_border' => array( 'label' => 'رنگ حاشیه', 'type' => 'color', 'var' => '--goldmate-info-border' ),
+					'pop_radius' => array( 'label' => 'گردی گوشه‌ها (px)', 'type' => 'px', 'var' => '--goldmate-info-radius', 'max' => 30 ),
+					'pop_size'   => array( 'label' => 'اندازه متن (px)', 'type' => 'px', 'var' => '--goldmate-info-font', 'max' => 24 ),
+					'pop_width'  => array( 'label' => 'حداکثر عرض (px)', 'type' => 'px', 'var' => '--goldmate-info-width', 'max' => 640 ),
 				),
 			),
 
@@ -255,9 +313,28 @@ class Goldmate_Appearance {
 
 			case 'checkbox':
 				return 'yes' === $raw ? 'yes' : '';
+
+			case 'textarea':
+				return sanitize_textarea_field( $raw );
 		}
 
 		return '';
+	}
+
+	/**
+	 * Text behind the final-price info icon; '' when the icon is hidden.
+	 *
+	 * @return string
+	 */
+	public static function price_info_text() {
+
+		$values = self::values();
+
+		if ( ! empty( $values['price_info_hide'] ) ) {
+			return '';
+		}
+
+		return ! empty( $values['price_info_text'] ) ? $values['price_info_text'] : self::PRICE_INFO_DEFAULT;
 	}
 
 	/**
@@ -415,6 +492,19 @@ class Goldmate_Appearance {
 			self::asset_version( 'assets/js/product-ui.js' ),
 			true
 		);
+
+		$values = self::values();
+
+		wp_localize_script(
+			'goldmate-product-ui',
+			'goldmateProductUiConfig',
+			array(
+				'priceInfo'        => self::price_info_text(),
+				'priceInfoLabel'   => 'نحوه محاسبه قیمت',
+				'priceInfoIcon'    => isset( $values['price_info_icon'] ) ? $values['price_info_icon'] : '',
+				'priceInfoTrigger' => isset( $values['price_info_trigger'] ) ? $values['price_info_trigger'] : '',
+			)
+		);
 	}
 
 	/**
@@ -451,57 +541,181 @@ class Goldmate_Appearance {
 	}
 
 	/**
-	 * Appearance tab UI.
+	 * Sub-heading a field is listed under inside its group card.
+	 *
+	 * @param array $field Field definition.
+	 * @return string
+	 */
+	protected static function field_section( $field ) {
+
+		$prop = isset( $field['rules'][0][1] ) ? $field['rules'][0][1] : '';
+
+		if ( 'textarea' === $field['type'] || 'checkbox' === $field['type'] || ( 'select' === $field['type'] && 'font-weight' !== $prop ) ) {
+			return 'نمایش و چیدمان';
+		}
+		if ( false !== strpos( $field['label'], 'ماوس' ) ) {
+			return 'هنگام قرارگیری ماوس';
+		}
+		if ( 'px' === $field['type'] || 'select' === $field['type'] ) {
+			return 'اندازه و شکل';
+		}
+
+		return 'رنگ‌ها';
+	}
+
+	/**
+	 * Prints one field's input.
+	 *
+	 * @param string $id    Field id.
+	 * @param array  $field Field definition.
+	 * @param string $value Saved value.
+	 */
+	protected static function render_field( $id, $field, $value ) {
+
+		$name = 'goldmate_ap_' . $id;
+
+		if ( 'color' === $field['type'] || 'overlay' === $field['type'] ) : ?>
+			<input type="text" class="goldmate-ap-color" id="<?php echo esc_attr( $name ); ?>" name="<?php echo esc_attr( $name ); ?>" value="<?php echo esc_attr( $value ); ?>">
+		<?php elseif ( 'px' === $field['type'] ) : ?>
+			<input type="number" min="0" max="<?php echo esc_attr( isset( $field['max'] ) ? $field['max'] : 200 ); ?>" step="1" class="small-text" id="<?php echo esc_attr( $name ); ?>" name="<?php echo esc_attr( $name ); ?>" value="<?php echo esc_attr( $value ); ?>" placeholder="پیش‌فرض">
+		<?php elseif ( 'select' === $field['type'] ) : ?>
+			<select id="<?php echo esc_attr( $name ); ?>" name="<?php echo esc_attr( $name ); ?>">
+				<?php foreach ( $field['options'] as $key => $label ) : ?>
+					<option value="<?php echo esc_attr( $key ); ?>" <?php selected( (string) $value, (string) $key ); ?>><?php echo esc_html( $label ); ?></option>
+				<?php endforeach; ?>
+			</select>
+		<?php elseif ( 'checkbox' === $field['type'] ) : ?>
+			<input type="checkbox" id="<?php echo esc_attr( $name ); ?>" name="<?php echo esc_attr( $name ); ?>" value="yes" <?php checked( $value, 'yes' ); ?>>
+		<?php elseif ( 'textarea' === $field['type'] ) : ?>
+			<textarea id="<?php echo esc_attr( $name ); ?>" name="<?php echo esc_attr( $name ); ?>" rows="3" class="large-text"><?php echo esc_textarea( '' !== $value ? $value : ( isset( $field['default'] ) ? $field['default'] : '' ) ); ?></textarea>
+		<?php endif;
+	}
+
+	/**
+	 * Appearance tab UI: a jump bar, then one collapsible card per group with
+	 * its fields split into colour / hover / size / layout sections.
 	 */
 	public static function render_admin_tab() {
 
 		$values = self::values();
+		$schema = self::schema();
+		$css    = isset( $values[ self::CUSTOM_CSS_KEY ] ) ? $values[ self::CUSTOM_CSS_KEY ] : '';
 		?>
+		<style>
+			.goldmate-ap-nav{display:flex;flex-wrap:wrap;gap:6px;margin:16px 0 12px;}
+			.goldmate-ap-nav a{padding:4px 12px;border:1px solid #c3c4c7;border-radius:999px;background:#fff;text-decoration:none;}
+			.goldmate-ap-nav a:hover{border-color:#2271b1;}
+			.goldmate-ap-card{max-width:960px;margin:0 0 10px;background:#fff;border:1px solid #c3c4c7;border-radius:6px;}
+			.goldmate-ap-card>summary{display:flex;align-items:center;gap:10px;padding:12px 16px;cursor:pointer;font-size:14px;font-weight:600;}
+			.goldmate-ap-card[open]>summary{border-bottom:1px solid #f0f0f1;}
+			.goldmate-ap-badge{padding:1px 8px;border-radius:999px;background:#f0f6fc;color:#2271b1;font-size:12px;font-weight:400;}
+			.goldmate-ap-body{padding:4px 16px 16px;}
+			.goldmate-ap-body>.description{margin:8px 0 0;}
+			.goldmate-ap-body h4{margin:16px 0 8px;color:#646970;font-size:12px;font-weight:600;}
+			.goldmate-ap-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px 24px;}
+			.goldmate-ap-field{display:flex;flex-direction:column;align-items:flex-start;gap:4px;}
+			.goldmate-ap-field.is-wide{grid-column:1/-1;align-items:stretch;}
+			.goldmate-ap-field.is-inline{flex-direction:row;align-items:center;}
+			.goldmate-ap-field>label{font-weight:500;}
+			.goldmate-ap-save{position:sticky;bottom:0;z-index:10;max-width:960px;margin:0;padding:12px 16px;background:#f0f0f1;border-top:1px solid #c3c4c7;}
+		</style>
+
 		<form method="post" action="<?php echo esc_url( Goldmate_Admin::url( 'appearance' ) ); ?>">
 			<?php wp_nonce_field( 'goldmate_admin' ); ?>
 
-			<?php foreach ( self::schema() as $group ) : ?>
-				<h2 style="margin-top:24px;"><?php echo esc_html( $group['title'] ); ?></h2>
-				<?php if ( ! empty( $group['desc'] ) ) : ?>
-					<p class="description"><?php echo esc_html( $group['desc'] ); ?></p>
-				<?php endif; ?>
-				<table class="form-table" role="presentation">
-					<?php foreach ( $group['fields'] as $id => $field ) : ?>
-						<?php
-						$name  = 'goldmate_ap_' . $id;
-						$value = isset( $values[ $id ] ) ? $values[ $id ] : '';
-						?>
-						<tr>
-							<th scope="row"><label for="<?php echo esc_attr( $name ); ?>"><?php echo esc_html( $field['label'] ); ?></label></th>
-							<td>
-								<?php if ( 'color' === $field['type'] || 'overlay' === $field['type'] ) : ?>
-									<input type="text" class="goldmate-ap-color" id="<?php echo esc_attr( $name ); ?>" name="<?php echo esc_attr( $name ); ?>" value="<?php echo esc_attr( $value ); ?>">
-								<?php elseif ( 'px' === $field['type'] ) : ?>
-									<input type="number" min="0" max="<?php echo esc_attr( isset( $field['max'] ) ? $field['max'] : 200 ); ?>" step="1" class="small-text" id="<?php echo esc_attr( $name ); ?>" name="<?php echo esc_attr( $name ); ?>" value="<?php echo esc_attr( $value ); ?>">
-								<?php elseif ( 'select' === $field['type'] ) : ?>
-									<select id="<?php echo esc_attr( $name ); ?>" name="<?php echo esc_attr( $name ); ?>">
-										<?php foreach ( $field['options'] as $key => $label ) : ?>
-											<option value="<?php echo esc_attr( $key ); ?>" <?php selected( (string) $value, (string) $key ); ?>><?php echo esc_html( $label ); ?></option>
-										<?php endforeach; ?>
-									</select>
-								<?php elseif ( 'checkbox' === $field['type'] ) : ?>
-									<input type="checkbox" id="<?php echo esc_attr( $name ); ?>" name="<?php echo esc_attr( $name ); ?>" value="yes" <?php checked( $value, 'yes' ); ?>>
-								<?php endif; ?>
-							</td>
-						</tr>
-					<?php endforeach; ?>
-				</table>
+			<nav class="goldmate-ap-nav">
+				<?php foreach ( $schema as $key => $group ) : ?>
+					<a href="#goldmate-ap-<?php echo esc_attr( $key ); ?>"><?php echo esc_html( $group['title'] ); ?></a>
+				<?php endforeach; ?>
+				<a href="#goldmate-ap-custom_css">CSS سفارشی</a>
+			</nav>
+
+			<?php foreach ( $schema as $key => $group ) : ?>
+				<?php
+				$sections = array_fill_keys( array( 'نمایش و چیدمان', 'رنگ‌ها', 'هنگام قرارگیری ماوس', 'اندازه و شکل' ), array() );
+				$changed  = 0;
+				foreach ( $group['fields'] as $id => $field ) {
+					$sections[ self::field_section( $field ) ][ $id ] = $field;
+					if ( ! empty( $values[ $id ] ) ) {
+						++$changed;
+					}
+				}
+				$sections = array_filter( $sections );
+				?>
+				<details class="goldmate-ap-card" id="goldmate-ap-<?php echo esc_attr( $key ); ?>">
+					<summary>
+						<?php echo esc_html( $group['title'] ); ?>
+						<?php if ( $changed ) : ?>
+							<span class="goldmate-ap-badge"><?php echo esc_html( sprintf( '%s مورد سفارشی', number_format_i18n( $changed ) ) ); ?></span>
+						<?php endif; ?>
+					</summary>
+					<div class="goldmate-ap-body">
+						<?php if ( ! empty( $group['desc'] ) ) : ?>
+							<p class="description"><?php echo esc_html( $group['desc'] ); ?></p>
+						<?php endif; ?>
+
+						<?php foreach ( $sections as $title => $fields ) : ?>
+							<?php if ( count( $sections ) > 1 ) : ?>
+								<h4><?php echo esc_html( $title ); ?></h4>
+							<?php endif; ?>
+							<div class="goldmate-ap-grid">
+								<?php foreach ( $fields as $id => $field ) : ?>
+									<?php
+									$value = isset( $values[ $id ] ) ? $values[ $id ] : '';
+									$class = 'goldmate-ap-field';
+									if ( 'textarea' === $field['type'] ) {
+										$class .= ' is-wide';
+									} elseif ( 'checkbox' === $field['type'] ) {
+										$class .= ' is-inline';
+									}
+									?>
+									<div class="<?php echo esc_attr( $class ); ?>">
+										<?php if ( 'checkbox' === $field['type'] ) : ?>
+											<?php self::render_field( $id, $field, $value ); ?>
+										<?php endif; ?>
+										<label for="<?php echo esc_attr( 'goldmate_ap_' . $id ); ?>"><?php echo esc_html( $field['label'] ); ?></label>
+										<?php if ( 'checkbox' !== $field['type'] ) : ?>
+											<?php self::render_field( $id, $field, $value ); ?>
+										<?php endif; ?>
+									</div>
+								<?php endforeach; ?>
+							</div>
+						<?php endforeach; ?>
+					</div>
+				</details>
 			<?php endforeach; ?>
 
-			<h2 style="margin-top:24px;">CSS سفارشی</h2>
-			<p class="description">استایل‌های دلخواه که بعد از همه‌ی موارد بالا روی سایت بارگذاری می‌شوند. برچسب‌های HTML حذف می‌شوند.</p>
-			<textarea name="goldmate_ap_custom_css" rows="10" class="large-text code" dir="ltr" style="max-width:720px;"><?php echo esc_textarea( isset( $values[ self::CUSTOM_CSS_KEY ] ) ? $values[ self::CUSTOM_CSS_KEY ] : '' ); ?></textarea>
+			<details class="goldmate-ap-card" id="goldmate-ap-custom_css">
+				<summary>
+					CSS سفارشی
+					<?php if ( '' !== $css ) : ?>
+						<span class="goldmate-ap-badge">فعال</span>
+					<?php endif; ?>
+				</summary>
+				<div class="goldmate-ap-body">
+					<p class="description">استایل‌های دلخواه که بعد از همه‌ی موارد بالا روی سایت بارگذاری می‌شوند. برچسب‌های HTML حذف می‌شوند.</p>
+					<textarea name="goldmate_ap_custom_css" rows="10" class="large-text code" dir="ltr" style="margin-top:8px;"><?php echo esc_textarea( $css ); ?></textarea>
+				</div>
+			</details>
 
-			<p class="submit">
+			<p class="submit goldmate-ap-save">
 				<button type="submit" class="button button-primary" name="goldmate_action" value="save">ذخیره تغییرات</button>
 				<button type="submit" class="button" name="goldmate_action" value="appearance_reset" onclick="return confirm('همه‌ی تنظیمات ظاهر به حالت پیش‌فرض برگردد؟');">بازگشت به پیش‌فرض</button>
 			</p>
 		</form>
+
+		<script>
+		( function () {
+			function openHash() {
+				var el = location.hash && document.getElementById( location.hash.slice( 1 ) );
+				if ( el && 'DETAILS' === el.tagName ) {
+					el.open = true;
+				}
+			}
+			window.addEventListener( 'hashchange', openHash );
+			openHash();
+		} )();
+		</script>
 		<?php
 	}
 }

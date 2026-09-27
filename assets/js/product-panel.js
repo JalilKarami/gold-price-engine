@@ -125,35 +125,47 @@ jQuery( function ( $ ) {
 		$( this ).attr( 'aria-expanded', open ? 'true' : 'false' );
 	} );
 
+	var reloadTimer = null;
+	var reloadSeq = 0;
+
+	// One product action can fire several of the events below; reload once.
+	function scheduleReload() {
+		clearTimeout( reloadTimer );
+		reloadTimer = setTimeout( reloadTable, 150 );
+	}
+
 	/**
-	 * Rebuilds the table after variations were added, removed or saved, keeping
-	 * whatever was typed into it but not saved yet.
+	 * Rebuilds the table after variations were added, removed, generated or
+	 * saved, keeping whatever was typed into it but not saved yet.
 	 */
 	function reloadTable() {
-		var $wrap = $panel.find( '.goldmate-var-table-wrap' );
+		var seq = ++reloadSeq;
 
-		if ( ! $wrap.length || typeof goldmateProductPreview === 'undefined' ) {
+		if ( ! $panel.find( '.goldmate-var-table-wrap' ).length || typeof goldmateProductPreview === 'undefined' ) {
 			return;
 		}
-
-		var typed = {};
-		var opened = {};
-
-		$wrap.find( ':input[name]' ).each( function () {
-			typed[ this.name ] = this.type === 'checkbox' ? this.checked : $( this ).val();
-		} );
-		$wrap.find( '.goldmate-var-extra' ).each( function () {
-			opened[ $( this ).attr( 'data-id' ) ] = ! $( this ).prop( 'hidden' );
-		} );
 
 		$.post( goldmateProductPreview.ajaxUrl, {
 			action: 'goldmate_variation_table',
 			nonce: goldmateProductPreview.nonce,
 			post_id: $( '#post_ID' ).val()
 		} ).done( function ( payload ) {
-			if ( ! payload || ! payload.success ) {
+			// A newer reload is on its way; this answer may predate its variations.
+			if ( seq !== reloadSeq || ! payload || ! payload.success ) {
 				return;
 			}
+
+			// Read the table as it is now, so nothing typed during the request is lost.
+			var $wrap = $panel.find( '.goldmate-var-table-wrap' );
+			var typed = {};
+			var opened = {};
+
+			$wrap.find( ':input[name]' ).each( function () {
+				typed[ this.name ] = this.type === 'checkbox' ? this.checked : $( this ).val();
+			} );
+			$wrap.find( '.goldmate-var-extra' ).each( function () {
+				opened[ $( this ).attr( 'data-id' ) ] = ! $( this ).prop( 'hidden' );
+			} );
 
 			var $fresh = $( '<div>' ).html( payload.data.html ).children( '.goldmate-var-table-wrap' );
 
@@ -188,9 +200,12 @@ jQuery( function ( $ ) {
 		} );
 	}
 
+	// "Generate variations" and bulk actions fire no "added" event: they only
+	// reload the variations list, so a new, unsaved product would otherwise keep
+	// an empty table until it is published or saved.
 	$( '#woocommerce-product-data' ).on(
-		'woocommerce_variations_added woocommerce_variations_removed woocommerce_variations_saved',
-		reloadTable
+		'woocommerce_variations_added woocommerce_variations_removed woocommerce_variations_saved woocommerce_variations_loaded',
+		scheduleReload
 	);
 
 	$panel.on( 'input change', ':input', syncSummaries );
