@@ -179,11 +179,16 @@ class Goldmate_Pricing {
 			return false;
 		}
 
-		$total = (string) $breakdown['total'];
+		$prices = self::wc_prices( $breakdown );
 
-		$product->set_regular_price( $total );
-		$product->set_sale_price( '' );
-		$product->set_price( $total );
+		$product->set_regular_price( $prices['regular'] );
+		$product->set_sale_price( $prices['sale'] );
+		$product->set_price( $prices['price'] );
+
+		// GoldMate discounts carry their own dates; a WooCommerce sale schedule
+		// left on the product would switch the sale price on or off behind them.
+		$product->set_date_on_sale_from( null );
+		$product->set_date_on_sale_to( null );
 
 		if ( 'none' === goldmate_option( 'goldmate_wc_tax_status' ) ) {
 			// VAT is already inside the price; WooCommerce must not add it again.
@@ -223,11 +228,14 @@ class Goldmate_Pricing {
 	 */
 	protected static function can_skip( $product, $breakdown ) {
 
-		$total = (float) $breakdown['total'];
+		$prices = self::wc_prices( $breakdown );
+		$sale   = $product->get_sale_price( 'edit' );
 
-		$current = abs( (float) $product->get_regular_price( 'edit' ) - $total ) < 0.5
-			&& abs( (float) $product->get_price( 'edit' ) - $total ) < 0.5
-			&& '' === $product->get_sale_price( 'edit' )
+		$current = abs( (float) $product->get_regular_price( 'edit' ) - (float) $prices['regular'] ) < 0.5
+			&& abs( (float) $product->get_price( 'edit' ) - (float) $prices['price'] ) < 0.5
+			&& ( '' === $prices['sale'] ? '' === $sale : ( '' !== $sale && abs( (float) $sale - (float) $prices['sale'] ) < 0.5 ) )
+			&& null === $product->get_date_on_sale_from( 'edit' )
+			&& null === $product->get_date_on_sale_to( 'edit' )
 			&& ( 'none' !== goldmate_option( 'goldmate_wc_tax_status' ) || 'none' === $product->get_tax_status( 'edit' ) );
 
 		if ( ! $current ) {
@@ -241,6 +249,71 @@ class Goldmate_Pricing {
 		$id = $product->get_id();
 
 		return isset( self::$repriced[ $id ] ) && self::$repriced[ $id ] === self::signature( $breakdown );
+	}
+
+	/**
+	 * The WooCommerce regular/sale/active prices for a breakdown.
+	 *
+	 * With an active GoldMate discount (and the setting on), the undiscounted
+	 * total becomes the regular price and the discounted total the sale price,
+	 * so WooCommerce shows it crossed out, badges the product as on sale and
+	 * lists it in sale filters. Otherwise the total is the regular price and any
+	 * sale price is cleared.
+	 *
+	 * @param array $breakdown Breakdown from the calculator.
+	 * @return array{regular:string,sale:string,price:string}
+	 */
+	public static function wc_prices( $breakdown ) {
+
+		$total = (string) $breakdown['total'];
+		$list  = self::list_price( $breakdown );
+
+		if ( $list > (float) $total ) {
+			return array(
+				'regular' => (string) $list,
+				'sale'    => $total,
+				'price'   => $total,
+			);
+		}
+
+		return array(
+			'regular' => $total,
+			'sale'    => '',
+			'price'   => $total,
+		);
+	}
+
+	/**
+	 * Price to show crossed out: the undiscounted total, or the total itself.
+	 *
+	 * @param array $breakdown Breakdown from the calculator.
+	 * @return float
+	 */
+	public static function list_price( $breakdown ) {
+
+		$total = (float) $breakdown['total'];
+
+		if ( 'yes' !== goldmate_option( 'goldmate_discount_as_sale' ) || empty( $breakdown['total_before_discount'] ) ) {
+			return $total;
+		}
+
+		return max( $total, (float) $breakdown['total_before_discount'] );
+	}
+
+	/**
+	 * Price HTML for a live-recalculated breakdown, matching what WooCommerce
+	 * renders for the stored prices (crossed-out regular price when discounted).
+	 *
+	 * @param array $breakdown Breakdown from the calculator.
+	 * @return string
+	 */
+	public static function price_html( $breakdown ) {
+
+		$list = self::list_price( $breakdown );
+
+		return $list > (float) $breakdown['total']
+			? wc_format_sale_price( $list, $breakdown['total'] )
+			: wc_price( $breakdown['total'] );
 	}
 
 	/**

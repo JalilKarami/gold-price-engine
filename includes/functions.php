@@ -43,6 +43,7 @@ function goldmate_defaults() {
 		'goldmate_reprice_on_product_save'    => 'yes',
 		'goldmate_store_calc_time'            => 'yes',
 		'goldmate_recalc_only_on_change'      => 'no',
+		'goldmate_discount_as_sale'           => 'yes',
 		'goldmate_price_history_hours'        => 24,
 		'goldmate_round_prices'               => 'yes',
 		'goldmate_strip_below'                => 1,

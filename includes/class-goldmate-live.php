@@ -262,7 +262,7 @@ class Goldmate_Live {
 			}
 			$out[ $id ] = array(
 				'live_total'      => $b['total'],
-				'live_total_html' => wc_price( $b['total'] ),
+				'live_total_html' => Goldmate_Pricing::price_html( $b ),
 			);
 		}
 		return $out;
@@ -323,7 +323,7 @@ class Goldmate_Live {
 			if ( false !== $b ) {
 				$data['product_id']      = $product_id;
 				$data['live_total']      = $b['total'];
-				$data['live_total_html'] = wc_price( $b['total'] );
+				$data['live_total_html'] = Goldmate_Pricing::price_html( $b );
 				$data['breakdown_html']  = Goldmate_Display::render_block( $b );
 			}
 		}

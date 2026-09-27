@@ -12,7 +12,7 @@ Single scenario (Bash; use the native PHP executable, not the `php` shell wrappe
 
     GOLDMATE_TEST_BOOTSTRAP='C:/Users/moham/AppData/Local/Temp/hermes-supervisor-readonly-test/goldmate/isolated/bootstrap.php' 'C:/laragon/bin/php/php-8.3.30-Win32-vs16-x64/php.exe' tests/same-request-pricing.php changed-weight
 
-Scenarios: `empty-parent`, `changed-weight`, `overwritten-price`, `repeated-save`, `changed-rate`.
+Scenarios: `empty-parent`, `changed-weight`, `overwritten-price`, `repeated-save`, `changed-rate`, `discount-sale` (an active GoldMate discount is written as a WooCommerce sale price).
 
 Bootstrap requirements for another machine: boot WordPress against the isolated schema with only WooCommerce activated; disable outbound HTTP and async cron; load the GoldMate helpers, install/schema class, rate-items, formulas, discounts, components, calculator, product-fields, variation-table and chosen pricing class; call Pricing::init and Variation_Table::init. No shop credentials are stored in this repository.
 

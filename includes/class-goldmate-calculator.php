@@ -362,6 +362,7 @@ class Goldmate_Calculator {
 			'discounts_enabled'     => ! empty( $discounts['enabled'] ),
 			'discount_map'          => $discount_map,
 			'discount_total'        => $discount_total,
+			'total_before_discount' => self::undiscounted_total( $inputs, $rate_18, $product_id, $discount_total, $total ),
 			'total'                 => $total,
 		);
 
@@ -554,6 +555,33 @@ class Goldmate_Calculator {
 		}
 
 		return $steps * $round_to;
+	}
+
+	/**
+	 * The rounded price the same inputs give with every discount switched off.
+	 *
+	 * Written to WooCommerce as the regular price when a discount is active, so
+	 * the storefront can show it crossed out next to the discounted total.
+	 *
+	 * @param array $inputs         Inputs passed to calculate_from_inputs().
+	 * @param float $rate_18        Toman per gram of 18-karat gold.
+	 * @param int   $product_id     Product or variation ID.
+	 * @param float $discount_total Sum of the discounts applied.
+	 * @param float $total          Discounted, rounded total.
+	 * @return float
+	 */
+	protected static function undiscounted_total( $inputs, $rate_18, $product_id, $discount_total, $total ) {
+
+		if ( $discount_total <= 0 ) {
+			return $total;
+		}
+
+		// A non-empty but disabled set outranks the product's stored discounts.
+		$inputs['discounts'] = array( 'enabled' => false, 'items' => array() );
+
+		$plain = self::calculate_from_inputs( $inputs, $rate_18, $product_id );
+
+		return false === $plain ? $total : max( $total, (float) $plain['total'] );
 	}
 
 	/**
