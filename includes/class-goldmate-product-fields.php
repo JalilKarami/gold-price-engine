@@ -22,6 +22,7 @@ class Goldmate_Product_Fields {
 		add_filter( 'woocommerce_product_data_tabs', array( __CLASS__, 'product_data_tab' ) );
 		add_action( 'woocommerce_product_data_panels', array( __CLASS__, 'render_product_panel' ) );
 		add_action( 'woocommerce_admin_process_product_object', array( __CLASS__, 'save_product_object' ) );
+		add_action( 'woocommerce_product_options_general_product_data', array( __CLASS__, 'render_price_note' ) );
 		add_action( 'admin_enqueue_scripts', array( __CLASS__, 'admin_assets' ) );
 
 		add_filter(
@@ -30,6 +31,16 @@ class Goldmate_Product_Fields {
 			10,
 			3
 		);
+	}
+
+	/**
+	 * Explains, in the General tab, where the hidden price fields went.
+	 *
+	 * product-panel.js shows it only while gold pricing is on, when WooCommerce's
+	 * regular and sale price fields are hidden because each reprice overwrites them.
+	 */
+	public static function render_price_note() {
+		echo '<div class="options_group goldmate-price-note" style="display:none;"><p class="form-field">قیمت این محصول با قیمت روز طلا خودکار محاسبه می‌شود و قیمت عادی و فروش ویژه‌ی ووکامرس در هر به‌روزرسانی بازنویسی می‌شوند. برای تخفیف، از بخش «تخفیف» در تب «نرخ خودکار» استفاده کنید.</p></div>';
 	}
 
 	/**

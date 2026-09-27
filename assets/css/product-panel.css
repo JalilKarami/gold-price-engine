@@ -205,3 +205,9 @@
 	margin: 6px 0 0;
 	padding: 0;
 }
+
+/* Gold pricing on: a variation's own price inputs would only be overwritten.
+   Only the block holding our pointer is touched, not WooCommerce's cost block. */
+#woocommerce-product-data.goldmate-pricing-on .variable_pricing:has(.goldmate-variation-pointer) > :not(.goldmate-variation-pointer) {
+	display: none !important;
+}

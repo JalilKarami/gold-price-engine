@@ -141,7 +141,7 @@ class Goldmate_Variation_Table {
 	 */
 	public static function render_accordion_pointer( $loop, $variation_data, $variation ) {
 
-		echo '<p class="form-row form-row-full goldmate-variation-pointer" style="clear:both;color:#646970;">وزن، عیار و اجرت این متغیر در تب «نرخ خودکار» وارد می‌شود.</p>';
+		echo '<p class="form-row form-row-full goldmate-variation-pointer" style="clear:both;color:#646970;">وزن، عیار، اجرت و تخفیف این متغیر در تب «نرخ خودکار» وارد می‌شود.</p>';
 	}
 
 	/**

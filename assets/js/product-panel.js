@@ -85,12 +85,36 @@ jQuery( function ( $ ) {
 		} );
 	}
 
-	// With automatic pricing on, the manual price fields would only be overwritten.
+	// WooCommerce variation bulk actions that write prices GoldMate would overwrite.
+	var PRICE_BULK_ACTIONS = [
+		'variable_regular_price',
+		'variable_regular_price_increase',
+		'variable_regular_price_decrease',
+		'variable_sale_price',
+		'variable_sale_price_increase',
+		'variable_sale_price_decrease',
+		'variable_sale_schedule'
+	];
+
+	// With automatic pricing on, the manual price fields would only be overwritten
+	// (a sale price is wiped on the next reprice), so hide them and point to the
+	// GoldMate discounts instead. The variation price inputs are hidden by CSS
+	// under .goldmate-pricing-on, which also covers variations loaded later.
 	function syncEnabled() {
 		var on = $( '#_goldmate_enabled' ).is( ':checked' );
 		$panel.find( '.goldmate-when-on' ).toggle( on );
 		$( '._regular_price_field, ._sale_price_field' ).closest( '.options_group' ).toggle( ! on );
 		$( '._regular_price_field, ._sale_price_field' ).toggle( ! on );
+		$( '.goldmate-price-note' ).toggle( on );
+		$( '#woocommerce-product-data' ).toggleClass( 'goldmate-pricing-on', on );
+
+		var $bulk = $( '#field_to_edit' );
+		PRICE_BULK_ACTIONS.forEach( function ( value ) {
+			$bulk.find( 'option[value="' + value + '"]' ).prop( 'disabled', on );
+		} );
+		if ( on && -1 !== PRICE_BULK_ACTIONS.indexOf( $bulk.val() ) ) {
+			$bulk.val( $bulk.find( 'option:not(:disabled)' ).first().val() );
+		}
 	}
 
 	/* Variation table ------------------------------------------------- */
