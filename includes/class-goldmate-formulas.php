@@ -15,6 +15,23 @@ if ( ! defined( 'ABSPATH' ) ) {
 class Goldmate_Formulas {
 
 	/**
+	 * Rows read this request, keyed like "id:3" / "slug:gold18".
+	 *
+	 * Pricing a catalogue looks up the same few rows once per product; this keeps
+	 * that to one query each. Every write through this class flushes it.
+	 *
+	 * @var array<string,array|null>
+	 */
+	protected static $cache = array();
+
+	/**
+	 * Drops rows cached by get() / get_by_slug().
+	 */
+	public static function flush_cache() {
+		self::$cache = array();
+	}
+
+	/**
 	 * @return string
 	 */
 	public static function table() {
@@ -83,6 +100,8 @@ class Goldmate_Formulas {
 	public static function insert( $data ) {
 		global $wpdb;
 
+		self::flush_cache();
+
 		$row = self::normalize_row( $data, true );
 		$ok  = $wpdb->insert( self::table(), $row['columns'], $row['formats'] );
 
@@ -96,6 +115,8 @@ class Goldmate_Formulas {
 	 */
 	public static function update( $id, $data ) {
 		global $wpdb;
+
+		self::flush_cache();
 
 		$id  = (int) $id;
 		$row = self::normalize_row( $data, false );
@@ -126,6 +147,8 @@ class Goldmate_Formulas {
 	public static function delete( $id ) {
 		global $wpdb;
 
+		self::flush_cache();
+
 		$id = (int) $id;
 
 		$item = self::get( $id );
@@ -136,7 +159,10 @@ class Goldmate_Formulas {
 			return false;
 		}
 
-		return false !== $wpdb->delete( self::table(), array( 'id' => $id ), array( '%d' ) );
+		$ok = false !== $wpdb->delete( self::table(), array( 'id' => $id ), array( '%d' ) );
+		self::flush_cache();
+
+		return $ok;
 	}
 
 	/**
@@ -147,6 +173,8 @@ class Goldmate_Formulas {
 	 */
 	public static function set_default( $id ) {
 		global $wpdb;
+
+		self::flush_cache();
 
 		$id    = (int) $id;
 		$table = self::table();
@@ -172,12 +200,19 @@ class Goldmate_Formulas {
 	public static function get( $id ) {
 		global $wpdb;
 
+		$key = 'id:' . (int) $id;
+		if ( array_key_exists( $key, self::$cache ) ) {
+			return self::$cache[ $key ];
+		}
+
 		$row = $wpdb->get_row(
 			$wpdb->prepare( 'SELECT * FROM ' . self::table() . ' WHERE id = %d', (int) $id ),
 			ARRAY_A
 		);
 
-		return $row ? self::hydrate( $row ) : null;
+		self::$cache[ $key ] = $row ? self::hydrate( $row ) : null;
+
+		return self::$cache[ $key ];
 	}
 
 	/**
@@ -187,19 +222,41 @@ class Goldmate_Formulas {
 	public static function get_by_slug( $slug ) {
 		global $wpdb;
 
+		$key = 'slug:' . sanitize_title( $slug );
+		if ( array_key_exists( $key, self::$cache ) ) {
+			return self::$cache[ $key ];
+		}
+
 		$slug = sanitize_title( $slug );
 		$row  = $wpdb->get_row(
 			$wpdb->prepare( 'SELECT * FROM ' . self::table() . ' WHERE slug = %s', $slug ),
 			ARRAY_A
 		);
 
-		return $row ? self::hydrate( $row ) : null;
+		self::$cache[ $key ] = $row ? self::hydrate( $row ) : null;
+
+		return self::$cache[ $key ];
 	}
 
 	/**
 	 * @return array|null
 	 */
 	public static function get_default() {
+		if ( array_key_exists( 'default', self::$cache ) ) {
+			return self::$cache['default'];
+		}
+
+		self::$cache['default'] = self::find_default();
+
+		return self::$cache['default'];
+	}
+
+	/**
+	 * Uncached lookup behind get_default().
+	 *
+	 * @return array|null
+	 */
+	protected static function find_default() {
 		global $wpdb;
 
 		$table = self::table();

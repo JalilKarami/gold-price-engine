@@ -11,45 +11,57 @@ class Goldmate_Discounts {
 
 	const GLOBAL_OPTION = 'goldmate_discounts_global';
 	const TERM_META     = 'goldmate_discounts';
+	const BOUNDARY_CRON = 'goldmate_discount_boundaries';
 
 	/**
 	 * Discount target definitions.
 	 *
-	 * @return array<string,array{label:string,default_type:string}>
+	 * `hint` tells the admin how each line interacts with the rest of the
+	 * formula, since e.g. a rate discount also shrinks percentage wage and profit.
+	 *
+	 * @return array<string,array{label:string,default_type:string,hint:string}>
 	 */
 	public static function targets() {
 		return array(
 			'profit'               => array(
 				'label'        => 'تخفیف روی سود',
 				'default_type' => 'pct',
+				'hint'         => 'فقط سود کم می‌شود.',
 			),
 			'wage'                 => array(
 				'label'        => 'تخفیف روی اجرت ساخت',
 				'default_type' => 'pct',
+				'hint'         => 'فقط اجرت ساخت کم می‌شود.',
 			),
 			'rate'                 => array(
 				'label'        => 'تخفیف روی قیمت آیتم / هر گرم',
 				'default_type' => 'fixed',
+				'hint'         => 'از نرخ هر گرم طلا کم می‌شود (مبلغ تخفیف × وزن)؛ اجرت و سود روی قیمت کامل طلا حساب می‌شوند.',
 			),
 			'accessories_per_gram' => array(
 				'label'        => 'تخفیف روی قیمت جواهر بر حسب گرم',
 				'default_type' => 'fixed',
+				'hint'         => 'در حالت ثابت، مبلغ × وزن محصول از جواهر کم می‌شود.',
 			),
 			'gold'                 => array(
 				'label'        => 'تخفیف روی قیمت محصول خام (مبلغ طلا)',
 				'default_type' => 'fixed',
+				'hint'         => 'فقط مبلغ طلا کم می‌شود؛ اجرت و سود روی مبلغ کامل طلا حساب می‌شوند.',
 			),
 			'accessories'          => array(
 				'label'        => 'تخفیف روی قیمت جواهر / ملحقات',
 				'default_type' => 'fixed',
+				'hint'         => 'فقط مبلغ جواهر / ملحقات کم می‌شود.',
 			),
 			'gold_and_accessories' => array(
 				'label'        => 'تخفیف روی قیمت محصول خام و جواهر',
 				'default_type' => 'fixed',
+				'hint'         => 'از جمع طلا و جواهر، به نسبت سهم هر کدام کم می‌شود.',
 			),
 			'total'                => array(
 				'label'        => 'تخفیف روی قیمت کل',
 				'default_type' => 'fixed',
+				'hint'         => 'پیش از مالیات از جمع قیمت کم می‌شود؛ مالیات روی مبلغ تخفیف‌خورده حساب می‌شود.',
 			),
 		);
 	}
@@ -62,10 +74,112 @@ class Goldmate_Discounts {
 		add_action( 'product_cat_edit_form_fields', array( __CLASS__, 'render_term_fields_edit' ), 10, 1 );
 		add_action( 'created_product_cat', array( __CLASS__, 'save_term' ) );
 		add_action( 'edited_product_cat', array( __CLASS__, 'save_term' ) );
+
+		add_action( self::BOUNDARY_CRON, array( __CLASS__, 'run_boundary_check' ) );
+		add_action( 'init', array( __CLASS__, 'ensure_scheduled' ) );
+	}
+
+	/**
+	 * Schedules the daily discount-window check shortly after local midnight.
+	 *
+	 * Discounts are baked into the stored price, so a window that opens or
+	 * closes only takes effect at the next reprice. Without this, a quiet day
+	 * with no rate change would keep an expired discount on sale.
+	 */
+	public static function ensure_scheduled() {
+
+		$first = ( new DateTime( 'tomorrow 00:05', wp_timezone() ) )->getTimestamp();
+
+		if ( function_exists( 'as_has_scheduled_action' ) && function_exists( 'as_schedule_recurring_action' ) ) {
+			if ( ! as_has_scheduled_action( self::BOUNDARY_CRON, array(), 'goldmate' ) ) {
+				as_schedule_recurring_action( $first, DAY_IN_SECONDS, self::BOUNDARY_CRON, array(), 'goldmate' );
+			}
+			$ts = wp_next_scheduled( self::BOUNDARY_CRON );
+			if ( $ts ) {
+				wp_unschedule_event( $ts, self::BOUNDARY_CRON );
+			}
+			return;
+		}
+
+		if ( ! wp_next_scheduled( self::BOUNDARY_CRON ) ) {
+			wp_schedule_event( $first, 'daily', self::BOUNDARY_CRON );
+		}
+	}
+
+	/**
+	 * Removes the daily discount-window check.
+	 */
+	public static function unschedule() {
+		if ( function_exists( 'as_unschedule_all_actions' ) ) {
+			as_unschedule_all_actions( self::BOUNDARY_CRON, null, 'goldmate' );
+		}
+		wp_unschedule_hook( self::BOUNDARY_CRON );
+	}
+
+	/**
+	 * Reprices the catalogue when any discount window opened today or closed yesterday.
+	 */
+	public static function run_boundary_check() {
+
+		// Not wp_date(): woodmart-plus rewrites it to Jalali, while the date
+		// fields store Gregorian Y-m-d in the site timezone.
+		$now       = new DateTime( 'now', wp_timezone() );
+		$today     = $now->format( 'Y-m-d' );
+		$yesterday = $now->modify( '-1 day' )->format( 'Y-m-d' );
+
+		if ( self::has_boundary( $today, $yesterday ) ) {
+			Goldmate_Batch::start( 'شروع یا پایان تخفیف' );
+		}
+	}
+
+	/**
+	 * True when a discount layer starts on `$today` or ended on `$yesterday`.
+	 *
+	 * @param string $today     Site-local Y-m-d.
+	 * @param string $yesterday Site-local Y-m-d.
+	 * @return bool
+	 */
+	public static function has_boundary( $today, $yesterday ) {
+		global $wpdb;
+
+		$crosses = function ( $layer ) use ( $today, $yesterday ) {
+			return $today === $layer['date_from'] || $yesterday === $layer['date_to'];
+		};
+
+		if ( $crosses( self::get_global() ) ) {
+			return true;
+		}
+
+		$term_ids = get_terms(
+			array(
+				'taxonomy'   => 'product_cat',
+				'hide_empty' => false,
+				'fields'     => 'ids',
+				'meta_key'   => self::TERM_META, // phpcs:ignore WordPress.DB.SlowDBQuery
+			)
+		);
+		foreach ( is_array( $term_ids ) ? $term_ids : array() as $term_id ) {
+			if ( $crosses( self::get_term( $term_id ) ) ) {
+				return true;
+			}
+		}
+
+		return (bool) $wpdb->get_var(
+			$wpdb->prepare(
+				"SELECT 1 FROM {$wpdb->postmeta}
+				  WHERE ( meta_key = '_goldmate_discounts_from' AND meta_value = %s )
+				     OR ( meta_key = '_goldmate_discounts_to' AND meta_value = %s )
+				  LIMIT 1",
+				$today,
+				$yesterday
+			)
+		);
 	}
 
 	/**
 	 * Resolve effective discounts for a product: product → category → global.
+	 *
+	 * Among several categories, the deepest one with an applicable discount wins.
 	 *
 	 * @param int        $product_id    Product or variation ID.
 	 * @param array|null $product_layer Unsaved product layer (edit-screen preview) used instead of the stored one.
@@ -235,7 +349,25 @@ class Goldmate_Discounts {
 		$parent = wp_get_post_parent_id( $product_id );
 		$id     = $parent ? $parent : $product_id;
 		$terms  = wp_get_post_terms( $id, 'product_cat', array( 'fields' => 'ids' ) );
-		return is_array( $terms ) ? array_map( 'intval', $terms ) : array();
+		if ( ! is_array( $terms ) ) {
+			return array();
+		}
+
+		// Most specific category first ("Rings > Wedding" before "Rings"), so its
+		// discount wins; equal depths keep WordPress's term order. usort() is
+		// stable on PHP 8, and the index tiebreak keeps it stable on 7.4 too.
+		$ranked = array();
+		foreach ( array_values( array_map( 'intval', $terms ) ) as $i => $term_id ) {
+			$ranked[] = array( $term_id, count( get_ancestors( $term_id, 'product_cat', 'taxonomy' ) ), $i );
+		}
+		usort(
+			$ranked,
+			function ( $a, $b ) {
+				return $b[1] <=> $a[1] ?: $a[2] <=> $b[2];
+			}
+		);
+
+		return array_column( $ranked, 0 );
 	}
 
 	/**
@@ -355,7 +487,7 @@ class Goldmate_Discounts {
 			<?php foreach ( self::targets() as $key => $def ) : ?>
 				<?php $row = $layer['items'][ $key ]; ?>
 				<tr>
-					<td><?php echo esc_html( $def['label'] ); ?></td>
+					<td><?php echo esc_html( $def['label'] ); ?><br><span class="description"><?php echo esc_html( $def['hint'] ); ?></span></td>
 					<td><input type="checkbox" name="<?php echo esc_attr( $prefix ); ?>_on[<?php echo esc_attr( $key ); ?>]" value="1" <?php checked( ! empty( $row['enabled'] ) ); ?>></td>
 					<td>
 						<select name="<?php echo esc_attr( $prefix ); ?>_type[<?php echo esc_attr( $key ); ?>]">

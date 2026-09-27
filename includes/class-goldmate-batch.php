@@ -52,10 +52,12 @@ class Goldmate_Batch {
 		$total = Goldmate_Pricing::count_enabled();
 
 		$progress = array(
+			'run'      => wp_generate_password( 12, false ),
 			'total'    => $total,
 			'done'     => 0,
 			'priced'   => 0,
 			'offset'   => 0,
+			'after'    => 0,
 			'reason'   => (string) $reason,
 			'started'  => time(),
 			'finished' => 0,
@@ -69,7 +71,7 @@ class Goldmate_Batch {
 			return $progress;
 		}
 
-		self::schedule_step( 0 );
+		self::schedule_step( $progress['run'], 0, 0 );
 
 		return $progress;
 	}
@@ -77,11 +79,17 @@ class Goldmate_Batch {
 	/**
 	 * Schedules one step, preferring Action Scheduler and falling back to WP-Cron.
 	 *
-	 * @param int $offset Rows already processed.
+	 * @param string $run    ID of the run the step belongs to.
+	 * @param int    $offset Rows already processed.
+	 * @param int    $after  Last product ID already processed.
 	 */
-	protected static function schedule_step( $offset ) {
+	protected static function schedule_step( $run, $offset, $after ) {
 
-		$args = array( 'offset' => (int) $offset );
+		$args = array(
+			'run'    => (string) $run,
+			'offset' => (int) $offset,
+			'after'  => (int) $after,
+		);
 
 		if ( self::has_scheduler() ) {
 			as_schedule_single_action( time(), self::HOOK, $args, self::GROUP );
@@ -95,33 +103,51 @@ class Goldmate_Batch {
 	/**
 	 * Processes one chunk and queues the next.
 	 *
+	 * A step belongs to the run that queued it. When a rate change restarts the
+	 * batch while a step is mid-flight, cancel() cannot stop that step, so it
+	 * must notice the new run and bow out rather than overwrite the new run's
+	 * progress and queue a second, competing chain of steps.
+	 *
 	 * @param array|int $args Step arguments; an int offset is accepted for WP-Cron.
 	 */
 	public static function run_step( $args = array() ) {
 
 		$offset = is_array( $args ) ? (int) ( $args['offset'] ?? 0 ) : (int) $args;
+		$run    = is_array( $args ) ? (string) ( $args['run'] ?? '' ) : '';
+		$after  = is_array( $args ) ? (int) ( $args['after'] ?? 0 ) : 0;
 
 		$progress = self::get_progress();
 
-		if ( empty( $progress ) || ! empty( $progress['finished'] ) ) {
+		if ( ! self::owns( $progress, $run ) ) {
 			return;
 		}
 
-		$ids = Goldmate_Pricing::get_enabled_ids( $offset, self::chunk_size() );
+		$ids = Goldmate_Pricing::get_enabled_ids( $after, self::chunk_size() );
 
 		if ( empty( $ids ) ) {
 			self::finish( $progress );
 			return;
 		}
 
+		$priced = 0;
+
 		foreach ( $ids as $id ) {
 			if ( false !== Goldmate_Pricing::apply( $id ) ) {
-				$progress['priced']++;
+				$priced++;
 			}
-			$progress['done']++;
 		}
 
-		$progress['offset'] = $offset + count( $ids );
+		// Pricing the chunk takes a while; a newer run may have started meanwhile.
+		$progress = self::get_progress();
+
+		if ( ! self::owns( $progress, $run ) ) {
+			return;
+		}
+
+		$progress['priced'] += $priced;
+		$progress['done']   += count( $ids );
+		$progress['offset']  = $offset + count( $ids );
+		$progress['after']   = (int) end( $ids );
 
 		update_option( self::PROGRESS_KEY, $progress, false );
 
@@ -130,7 +156,26 @@ class Goldmate_Batch {
 			return;
 		}
 
-		self::schedule_step( $progress['offset'] );
+		self::schedule_step( $run, $progress['offset'], $progress['after'] );
+	}
+
+	/**
+	 * True when a step of run `$run` may still act on the stored progress.
+	 *
+	 * Progress saved before run IDs existed has none, and neither do the steps it
+	 * queued, so those still match each other across the upgrade.
+	 *
+	 * @param array  $progress Stored progress.
+	 * @param string $run      Run ID carried by the step.
+	 * @return bool
+	 */
+	protected static function owns( $progress, $run ) {
+
+		if ( empty( $progress ) || ! empty( $progress['finished'] ) ) {
+			return false;
+		}
+
+		return (string) ( $progress['run'] ?? '' ) === $run;
 	}
 
 	/**

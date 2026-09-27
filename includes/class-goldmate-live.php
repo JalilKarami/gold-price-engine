@@ -171,14 +171,15 @@ class Goldmate_Live {
 		if ( $item_slug && class_exists( 'Goldmate_Rate_Items' ) && ! $product_id && empty( $product_ids ) ) {
 			$item = Goldmate_Rate_Items::get_by_slug( $item_slug );
 			if ( $item ) {
+				$change = self::change_pct( (int) $item['id'] );
 				wp_send_json_success(
 					array(
 						'rate'            => (float) $item['rate'],
 						'rate_html'       => $item['rate'] > 0 ? wc_price( $item['rate'] ) : '',
 						'updated_at'      => (int) $item['updated_at'],
 						'updated_human'   => goldmate_format_time( (int) $item['updated_at'] ),
-						'change_pct'      => self::change_pct( (int) $item['id'] ),
-						'change_pct_html' => self::format_change_pct( self::change_pct( (int) $item['id'] ) ),
+						'change_pct'      => $change,
+						'change_pct_html' => self::format_change_pct( $change ),
 						'item'            => $item['slug'],
 						'item_label'      => $item['label'],
 					)

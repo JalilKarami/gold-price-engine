@@ -151,7 +151,10 @@
 		return ids.slice( 0, 24 );
 	}
 
+	var lastPoll = 0;
+
 	function pollAll() {
+		lastPoll = Date.now();
 		collectBoardItems();
 		request( {} );
 		items.forEach( function ( slug ) {
@@ -453,5 +456,16 @@
 
 	bindVariationTracking();
 	pollAll();
-	setInterval( pollAll, interval );
+
+	// Background tabs skip polls; catch up as soon as the tab is shown again.
+	setInterval( function () {
+		if ( ! document.hidden ) {
+			pollAll();
+		}
+	}, interval );
+	document.addEventListener( 'visibilitychange', function () {
+		if ( ! document.hidden && Date.now() - lastPoll > interval / 2 ) {
+			pollAll();
+		}
+	} );
 } )();

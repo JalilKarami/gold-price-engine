@@ -9,6 +9,12 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class Goldmate_Fetcher {
 
+	/**
+	 * Largest jump, as a multiple of the deviation limit, that two agreeing
+	 * fetches may confirm. See confirms_held_rate().
+	 */
+	const CONFIRM_CEILING = 2;
+
 	const ITEM_CRON = 'goldmate_fetch_rate_items';
 
 	/**
@@ -204,10 +210,14 @@ class Goldmate_Fetcher {
 
 		$dev = self::deviation_pct( $rate, (float) $item['rate'] );
 		$max = goldmate_positive_float( goldmate_option( 'goldmate_max_deviation' ) );
-		if ( $max > 0 && (float) $item['rate'] > 0 && $dev > $max ) {
+		if ( $max > 0 && (float) $item['rate'] > 0 && $dev > $max && ! self::confirms_held_rate( $item, $rate, $dev, $max ) ) {
 			$result['error'] = sprintf( 'اختلاف %.1f٪ بیش از سقف مجاز است.', $dev );
+			if ( $dev <= $max * self::CONFIRM_CEILING ) {
+				$result['error'] .= ' اگر دریافت بعدی همین نرخ را تأیید کند، اعمال می‌شود.';
+			}
 			$result['ok']    = false;
 			$result['rate']  = $rate;
+			Goldmate_Rate_Items::update( (int) $item['id'], array( 'last_error' => $result['error'] ) );
 			return $result;
 		}
 
@@ -791,6 +801,52 @@ class Goldmate_Fetcher {
 			return true;
 		}
 		return false;
+	}
+
+	/**
+	 * Decides whether an over-limit rate has been confirmed by the previous fetch.
+	 *
+	 * A real market jump bigger than the deviation limit would otherwise be
+	 * rejected forever, because every later fetch is compared against the same
+	 * stale rate. So an over-limit rate is held, and applied once the next fetch
+	 * lands within the limit of the held one. Jumps beyond CONFIRM_CEILING times
+	 * the limit are never auto-confirmed: those are unit mistakes (Rial for
+	 * Toman is 900%) that a broken source would repeat on every fetch.
+	 *
+	 * @param array $item Rate item.
+	 * @param float $rate Normalised new rate.
+	 * @param float $dev  Deviation from the current rate, in percent.
+	 * @param float $max  Deviation limit, in percent.
+	 * @return bool True when the rate should be applied.
+	 */
+	protected static function confirms_held_rate( $item, $rate, $dev, $max ) {
+
+		$key = self::held_rate_option( (int) $item['id'] );
+
+		if ( $dev > $max * self::CONFIRM_CEILING ) {
+			delete_option( $key );
+			return false;
+		}
+
+		$held = goldmate_positive_float( get_option( $key, 0 ) );
+
+		if ( $held > 0 && self::deviation_pct( $rate, $held ) <= $max ) {
+			delete_option( $key );
+			return true;
+		}
+
+		update_option( $key, $rate, false );
+		return false;
+	}
+
+	/**
+	 * Option holding an item's over-limit rate awaiting confirmation.
+	 *
+	 * @param int $item_id Rate item ID.
+	 * @return string
+	 */
+	public static function held_rate_option( $item_id ) {
+		return 'goldmate_held_rate_' . (int) $item_id;
 	}
 
 	/**

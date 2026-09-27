@@ -127,7 +127,9 @@ function goldmate_deactivate() {
 	require_once GOLDMATE_PATH . 'includes/functions.php';
 	require_once GOLDMATE_PATH . 'includes/class-goldmate-fetcher.php';
 	require_once GOLDMATE_PATH . 'includes/class-goldmate-batch.php';
+	require_once GOLDMATE_PATH . 'includes/class-goldmate-discounts.php';
 	Goldmate_Fetcher::unschedule();
 	Goldmate_Batch::cancel();
+	Goldmate_Discounts::unschedule();
 }
 register_deactivation_hook( __FILE__, 'goldmate_deactivate' );

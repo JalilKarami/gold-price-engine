@@ -20,12 +20,14 @@ class Goldmate_Pricing {
 	protected static $in_progress = array();
 
 	/**
-	 * Successful child calculation signatures, keyed by variation ID.
+	 * Successful calculation signatures, keyed by product or variation ID.
 	 *
-	 * Child saves queue deferred parent syncs after $in_progress is released.
-	 * Skip a repeated calculation only while its stored prices still match.
-	 * Unlike a once-per-parent flag, this permits new children and changed
-	 * inputs/rates later in the same request without a deferred save loop.
+	 * One request can reach apply() several times for the same product: the
+	 * admin form saves the product (CRUD hook) and then fires
+	 * `woocommerce_process_product_meta`, and parent syncs save the children
+	 * again. Skip a repeated calculation only while its stored prices still
+	 * match. Unlike a once-per-product flag, this permits new children and
+	 * changed inputs/rates later in the same request without a save loop.
 	 * Failed writes are never recorded, so they remain retryable.
 	 *
 	 * @var array<int,string>
@@ -93,11 +95,8 @@ class Goldmate_Pricing {
 			return false;
 		}
 
-		if ( 'yes' === goldmate_option( 'goldmate_recalc_only_on_change' ) ) {
-			$current = goldmate_positive_float( $product->get_regular_price() );
-			if ( abs( $current - (float) $breakdown['total'] ) < 0.5 ) {
-				return 0;
-			}
+		if ( self::can_skip( $product, $breakdown ) ) {
+			return 0;
 		}
 
 		return self::write_price( $product, $breakdown ) ? 1 : false;
@@ -142,20 +141,11 @@ class Goldmate_Pricing {
 
 				$variation = wc_get_product( $variation_id );
 
-				// Deferred parent syncs must not save identical children again.
-				// Include the full breakdown so changed weights/rates/audit data
-				// can be written again within this same request.
-				$signature = md5( serialize( array( $breakdown, goldmate_option( 'goldmate_wc_tax_status' ) ) ) );
-				if ( $variation && isset( self::$repriced[ $variation_id ] )
-					&& self::$repriced[ $variation_id ] === $signature
-					&& (float) $variation->get_regular_price( 'edit' ) === (float) $breakdown['total']
-					&& (float) $variation->get_price( 'edit' ) === (float) $breakdown['total']
-					&& '' === $variation->get_sale_price( 'edit' ) ) {
+				if ( ! $variation || self::can_skip( $variation, $breakdown ) ) {
 					continue;
 				}
 
-				if ( $variation && self::write_price( $variation, $breakdown ) ) {
-					self::$repriced[ $variation_id ] = $signature;
+				if ( self::write_price( $variation, $breakdown ) ) {
 					$count++;
 				}
 			}
@@ -208,16 +198,59 @@ class Goldmate_Pricing {
 			unset( self::$in_progress[ $id ] );
 		}
 
-		// Remember what the price was built from, for auditing and invoices.
 		if ( 'yes' === goldmate_option( 'goldmate_store_calc_time' ) ) {
 			update_post_meta( $id, '_goldmate_priced_at', time() );
 		}
-		update_post_meta( $id, '_goldmate_priced_rate', $breakdown['rate_18'] );
-		update_post_meta( $id, '_goldmate_tax_amount', $breakdown['tax'] );
 
 		wc_delete_product_transients( $id );
 
+		self::$repriced[ $id ] = self::signature( $breakdown );
+
 		return true;
+	}
+
+	/**
+	 * True when writing `$breakdown` onto `$product` would change nothing worth saving.
+	 *
+	 * With "only reprice on change" on, any product whose stored price already
+	 * matches is skipped. Otherwise only a repeat of a calculation this request
+	 * already wrote is skipped (see $repriced), so changed weights, rates or
+	 * breakdown data are still written again within the same request.
+	 *
+	 * @param WC_Product $product   Product or variation.
+	 * @param array      $breakdown Breakdown from the calculator.
+	 * @return bool
+	 */
+	protected static function can_skip( $product, $breakdown ) {
+
+		$total = (float) $breakdown['total'];
+
+		$current = abs( (float) $product->get_regular_price( 'edit' ) - $total ) < 0.5
+			&& abs( (float) $product->get_price( 'edit' ) - $total ) < 0.5
+			&& '' === $product->get_sale_price( 'edit' )
+			&& ( 'none' !== goldmate_option( 'goldmate_wc_tax_status' ) || 'none' === $product->get_tax_status( 'edit' ) );
+
+		if ( ! $current ) {
+			return false;
+		}
+
+		if ( 'yes' === goldmate_option( 'goldmate_recalc_only_on_change' ) ) {
+			return true;
+		}
+
+		$id = $product->get_id();
+
+		return isset( self::$repriced[ $id ] ) && self::$repriced[ $id ] === self::signature( $breakdown );
+	}
+
+	/**
+	 * Fingerprint of a calculation and the settings write_price() applies with it.
+	 *
+	 * @param array $breakdown Breakdown from the calculator.
+	 * @return string
+	 */
+	protected static function signature( $breakdown ) {
+		return md5( serialize( array( $breakdown, goldmate_option( 'goldmate_wc_tax_status' ) ) ) );
 	}
 
 	/* ---------------------------------------------------------------------
@@ -290,11 +323,8 @@ class Goldmate_Pricing {
 			return;
 		}
 
-		if ( 'yes' === goldmate_option( 'goldmate_recalc_only_on_change' ) ) {
-			$current = goldmate_positive_float( $product->get_regular_price() );
-			if ( abs( $current - (float) $breakdown['total'] ) < 0.5 ) {
-				return;
-			}
+		if ( self::can_skip( $product, $breakdown ) ) {
+			return;
 		}
 
 		self::write_price( $product, $breakdown );
@@ -352,13 +382,16 @@ class Goldmate_Pricing {
 	}
 
 	/**
-	 * Fetches one page of gold-product IDs, ordered stably by ID.
+	 * Fetches the next page of gold-product IDs above `$after_id`, ordered by ID.
 	 *
-	 * @param int $offset Rows to skip.
-	 * @param int $limit  Rows to return.
+	 * Paging by ID rather than OFFSET keeps a background run from skipping or
+	 * repeating products when one is enabled, disabled or trashed mid-run.
+	 *
+	 * @param int $after_id Last ID already handled; 0 to start.
+	 * @param int $limit    Rows to return.
 	 * @return int[]
 	 */
-	public static function get_enabled_ids( $offset = 0, $limit = 50 ) {
+	public static function get_enabled_ids( $after_id = 0, $limit = 50 ) {
 		global $wpdb;
 
 		$ids = $wpdb->get_col(
@@ -370,50 +403,14 @@ class Goldmate_Pricing {
 				    AND p.post_status != 'trash'
 				    AND m.meta_key = '_goldmate_enabled'
 				    AND m.meta_value = 'yes'
+				    AND p.ID > %d
 				  ORDER BY p.ID ASC
-				  LIMIT %d OFFSET %d",
-				(int) $limit,
-				(int) $offset
+				  LIMIT %d",
+				(int) $after_id,
+				(int) $limit
 			)
 		);
 
 		return array_map( 'intval', (array) $ids );
-	}
-
-	/**
-	 * Reprices every gold product in one request.
-	 *
-	 * Kept for WP-CLI and small catalogues. The admin UI uses Goldmate_Batch so a
-	 * large catalogue cannot time out mid-way and leave prices half-updated.
-	 *
-	 * @return int Number of parent products touched.
-	 */
-	public static function apply_all_now() {
-
-		$count  = 0;
-		$offset = 0;
-
-		while ( true ) {
-
-			$ids = self::get_enabled_ids( $offset, 50 );
-
-			if ( empty( $ids ) ) {
-				break;
-			}
-
-			foreach ( $ids as $id ) {
-				if ( false !== self::apply( $id ) ) {
-					$count++;
-				}
-			}
-
-			$offset += 50;
-		}
-
-		if ( function_exists( 'wc_delete_product_transients' ) ) {
-			wc_delete_product_transients();
-		}
-
-		return $count;
 	}
 }

@@ -12,6 +12,23 @@ class Goldmate_Rate_Items {
 	const DEFAULT_SLUG = 'gold18';
 
 	/**
+	 * Rows read this request, keyed like "id:3" / "slug:gold18".
+	 *
+	 * Pricing a catalogue looks up the same few rows once per product; this keeps
+	 * that to one query each. Every write through this class flushes it.
+	 *
+	 * @var array<string,array|null>
+	 */
+	protected static $cache = array();
+
+	/**
+	 * Drops rows cached by get() / get_by_slug().
+	 */
+	public static function flush_cache() {
+		self::$cache = array();
+	}
+
+	/**
 	 * @return string
 	 */
 	public static function table() {
@@ -103,6 +120,8 @@ class Goldmate_Rate_Items {
 	public static function insert( $data ) {
 		global $wpdb;
 
+		self::flush_cache();
+
 		$row = self::normalize_row( $data, true );
 		$ok  = $wpdb->insert( self::table(), $row['columns'], $row['formats'] );
 
@@ -116,6 +135,8 @@ class Goldmate_Rate_Items {
 	 */
 	public static function update( $id, $data ) {
 		global $wpdb;
+
+		self::flush_cache();
 
 		$id  = (int) $id;
 		$row = self::normalize_row( $data, false );
@@ -140,6 +161,8 @@ class Goldmate_Rate_Items {
 	public static function delete( $id ) {
 		global $wpdb;
 
+		self::flush_cache();
+
 		$id   = (int) $id;
 		$item = self::get( $id );
 		if ( ! $item ) {
@@ -150,34 +173,10 @@ class Goldmate_Rate_Items {
 		}
 
 		$wpdb->delete( self::history_table(), array( 'item_id' => $id ), array( '%d' ) );
-		return false !== $wpdb->delete( self::table(), array( 'id' => $id ), array( '%d' ) );
-	}
+		$ok = false !== $wpdb->delete( self::table(), array( 'id' => $id ), array( '%d' ) );
+		self::flush_cache();
 
-	/**
-	 * Duplicate an item with a new slug.
-	 *
-	 * @param int    $id   Source ID.
-	 * @param string $slug New slug.
-	 * @return int|false
-	 */
-	public static function duplicate( $id, $slug = '' ) {
-		$item = self::get( $id );
-		if ( ! $item ) {
-			return false;
-		}
-
-		unset( $item['id'] );
-		$base = $slug ? $slug : $item['slug'] . '-copy';
-		$n    = 1;
-		$try  = $base;
-		while ( self::get_by_slug( $try ) ) {
-			$try = $base . '-' . $n;
-			$n++;
-		}
-		$item['slug']  = sanitize_title( $try );
-		$item['label'] = $item['label'] . ' (کپی)';
-
-		return self::insert( $item );
+		return $ok;
 	}
 
 	/**
@@ -186,11 +185,18 @@ class Goldmate_Rate_Items {
 	 */
 	public static function get( $id ) {
 		global $wpdb;
+
+		$key = 'id:' . (int) $id;
+		if ( array_key_exists( $key, self::$cache ) ) {
+			return self::$cache[ $key ];
+		}
 		$row = $wpdb->get_row(
 			$wpdb->prepare( 'SELECT * FROM ' . self::table() . ' WHERE id = %d', (int) $id ),
 			ARRAY_A
 		);
-		return $row ? self::hydrate( $row ) : null;
+		self::$cache[ $key ] = $row ? self::hydrate( $row ) : null;
+
+		return self::$cache[ $key ];
 	}
 
 	/**
@@ -199,12 +205,19 @@ class Goldmate_Rate_Items {
 	 */
 	public static function get_by_slug( $slug ) {
 		global $wpdb;
+
+		$key = 'slug:' . sanitize_title( $slug );
+		if ( array_key_exists( $key, self::$cache ) ) {
+			return self::$cache[ $key ];
+		}
 		$slug = sanitize_title( $slug );
 		$row  = $wpdb->get_row(
 			$wpdb->prepare( 'SELECT * FROM ' . self::table() . ' WHERE slug = %s', $slug ),
 			ARRAY_A
 		);
-		return $row ? self::hydrate( $row ) : null;
+		self::$cache[ $key ] = $row ? self::hydrate( $row ) : null;
+
+		return self::$cache[ $key ];
 	}
 
 	/**
@@ -412,6 +425,9 @@ class Goldmate_Rate_Items {
 		$previous = goldmate_positive_float( $item['rate'] );
 		$now      = time();
 
+		// Any accepted rate supersedes an over-limit one awaiting confirmation.
+		delete_option( 'goldmate_held_rate_' . (int) $item_id );
+
 		self::update(
 			$item_id,
 			array(
@@ -440,7 +456,6 @@ class Goldmate_Rate_Items {
 			update_option( 'goldmate_rate_updated_at', $now, false );
 			update_option( 'goldmate_rate_checked_at', $now, false );
 			update_option( 'goldmate_rate_last_error', '', false );
-			delete_option( 'goldmate_pending_rate' );
 			if ( ! empty( $args['provider'] ) ) {
 				update_option( 'goldmate_rate_last_provider', (string) $args['provider'], false );
 			}

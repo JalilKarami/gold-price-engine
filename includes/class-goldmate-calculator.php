@@ -202,15 +202,18 @@ class Goldmate_Calculator {
 			$discount_rate = $d['discount'];
 		}
 
-		$gold = $weight * $rate;
-		$gold_before_discount = $gold;
+		// Wage, components and profit are priced on the full market gold value, so a
+		// per-gram discount takes off exactly its amount × weight and nothing more
+		// (the same as a "gold" discount, which is applied further down).
+		$gold_before_discount = $weight * $rate_before_discount;
+		$gold                 = $weight * $rate;
 
 		if ( 'fixed' === $wage_mode ) {
 			$wage = $weight * $wage_fixed;
 		} elseif ( 'combined' === $wage_mode ) {
-			$wage = ( $weight * $wage_fixed ) + ( $gold * ( $wage_pct / 100 ) );
+			$wage = ( $weight * $wage_fixed ) + ( $gold_before_discount * ( $wage_pct / 100 ) );
 		} else {
-			$wage = $gold * ( $wage_pct / 100 );
+			$wage = $gold_before_discount * ( $wage_pct / 100 );
 		}
 		$wage_before_discount = $wage;
 
@@ -222,10 +225,10 @@ class Goldmate_Calculator {
 			'profit_base' => 0.0,
 		);
 		if ( class_exists( 'Goldmate_Components' ) ) {
-			$components = Goldmate_Components::compute( $inputs, $gold, $wage, $product_id );
+			$components = Goldmate_Components::compute( $inputs, $gold_before_discount, $wage, $product_id );
 		}
 
-		$profit_base = $gold + $wage + $components['profit_base'];
+		$profit_base = $gold_before_discount + $wage + $components['profit_base'];
 		if ( $profit_accessories ) {
 			$profit_base += $accessories;
 		}
@@ -299,15 +302,21 @@ class Goldmate_Calculator {
 			$taxable += $accessories;
 		}
 
+		$subtotal = $gold + $wage + $profit + $accessories + $components['total'];
+
+		// A "total" discount comes off before tax: it shrinks every line by the same
+		// share, so the taxable part shrinks with it and the invoiced VAT matches
+		// the price actually paid.
+		if ( class_exists( 'Goldmate_Discounts' ) && Goldmate_Discounts::is_active( $discounts, 'total' ) && $subtotal > 0 ) {
+			$d = Goldmate_Discounts::apply_one( $subtotal, $discounts['items']['total']['type'], $discounts['items']['total']['amount'] );
+			$discount_map['total'] = $d['discount'];
+			$taxable              *= $d['amount'] / $subtotal;
+			$subtotal              = $d['amount'];
+		}
+
 		$tax = $taxable * ( $tax_pct / 100 );
 
-		$total = $gold + $wage + $profit + $accessories + $components['total'] + $tax;
-
-		if ( class_exists( 'Goldmate_Discounts' ) && Goldmate_Discounts::is_active( $discounts, 'total' ) ) {
-			$d = Goldmate_Discounts::apply_one( $total, $discounts['items']['total']['type'], $discounts['items']['total']['amount'] );
-			$discount_map['total'] = $d['discount'];
-			$total                 = $d['amount'];
-		}
+		$total = $subtotal + $tax;
 
 		$total = self::round_total( $total, $round_to, $round_mode );
 
@@ -529,7 +538,9 @@ class Goldmate_Calculator {
 			return round( $total, 2 );
 		}
 
-		$steps = $total / $round_to;
+		// Trim float noise first: an exact multiple can come out as 3.0000000000000004
+		// steps, which ceil() would push a whole step up.
+		$steps = round( $total / $round_to, 6 );
 
 		switch ( $mode ) {
 			case 'ceil':
@@ -709,6 +720,10 @@ class Goldmate_Calculator {
 		$parts[] = goldmate_plain_price( $b['tax'] );
 
 		$expression = implode( ' + ', $parts );
+
+		if ( ! empty( $b['discount_map']['total'] ) ) {
+			$expression .= ' − ' . goldmate_plain_price( $b['discount_map']['total'] );
+		}
 
 		$rounding = self::rounding_difference( $b );
 

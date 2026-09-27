@@ -83,7 +83,6 @@ function goldmate_defaults() {
 		'goldmate_stale_action' => 'notice',
 
 		// Fetch log retention.
-		'goldmate_log_days' => 14,
 	);
 }
 
@@ -96,7 +95,12 @@ function goldmate_defaults() {
  */
 function goldmate_option( $key, $default = null ) {
 
-	$defaults = goldmate_defaults();
+	// goldmate_defaults() builds a large array; pricing calls this ~15 times per product.
+	static $defaults = null;
+
+	if ( null === $defaults ) {
+		$defaults = goldmate_defaults();
+	}
 
 	if ( null === $default ) {
 		$default = isset( $defaults[ $key ] ) ? $defaults[ $key ] : '';
@@ -171,24 +175,6 @@ function goldmate_plain_price( $amount, $currency = null ) {
 	$args = $currency ? array( 'currency' => $currency ) : array();
 
 	return html_entity_decode( wp_strip_all_tags( wc_price( $amount, $args ) ), ENT_QUOTES, 'UTF-8' );
-}
-
-/**
- * Meta keys that carry per-product calculation inputs.
- *
- * @return string[]
- */
-function goldmate_numeric_meta_keys() {
-	return array(
-		'_goldmate_weight',
-		'_goldmate_karat',
-		'_goldmate_wage_pct',
-		'_goldmate_wage_fixed',
-		'_goldmate_stone',
-		'_goldmate_leather',
-		'_goldmate_accessories',
-		'_goldmate_profit_pct',
-	);
 }
 
 /**

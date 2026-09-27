@@ -223,6 +223,7 @@ class Goldmate_Product_Fields {
 
 			$disc_rows[ $key ] = array(
 				'label'  => $def['label'],
+				'hint'   => $def['hint'],
 				'type'   => $row['type'],
 				'amount' => $active ? $row['amount'] : '',
 			);
@@ -407,7 +408,7 @@ class Goldmate_Product_Fields {
 					<tbody>
 						<?php foreach ( $disc_rows as $key => $row ) : ?>
 							<tr>
-								<td><?php echo esc_html( $row['label'] ); ?></td>
+								<td><?php echo esc_html( $row['label'] ); ?><br><span class="description"><?php echo esc_html( $row['hint'] ); ?></span></td>
 								<td>
 									<select name="_goldmate_discounts[<?php echo esc_attr( $key ); ?>][type]">
 										<option value="pct" <?php selected( $row['type'], 'pct' ); ?>>درصدی</option>
