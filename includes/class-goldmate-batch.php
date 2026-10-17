@@ -18,7 +18,7 @@ class Goldmate_Batch {
 	 * Registers the background step handler.
 	 */
 	public static function init() {
-		add_action( self::HOOK, array( __CLASS__, 'run_step' ), 10, 1 );
+		add_action( self::HOOK, array( __CLASS__, 'run_step' ), 10, 3 );
 	}
 
 	/**
@@ -91,8 +91,10 @@ class Goldmate_Batch {
 			'after'  => (int) $after,
 		);
 
+		// Action Scheduler calls the hook with array_values( $args ), so wrap the
+		// step arguments in a list to hand run_step() the array, as WP-Cron does.
 		if ( self::has_scheduler() ) {
-			as_schedule_single_action( time(), self::HOOK, $args, self::GROUP );
+			as_schedule_single_action( time(), self::HOOK, array( $args ), self::GROUP );
 			return;
 		}
 
@@ -108,13 +110,29 @@ class Goldmate_Batch {
 	 * must notice the new run and bow out rather than overwrite the new run's
 	 * progress and queue a second, competing chain of steps.
 	 *
-	 * @param array|int $args Step arguments; an int offset is accepted for WP-Cron.
+	 * Steps queued in Action Scheduler before 3.6.1 arrive as positional
+	 * values (run, offset, after) because Action Scheduler unwraps the keyed
+	 * array; those are still accepted. Older WP-Cron events pass an int offset.
+	 *
+	 * @param array|int|string $args       Step arguments, or the run ID of an unwrapped step.
+	 * @param int|null         $pos_offset Offset of an unwrapped step.
+	 * @param int|null         $pos_after  Last product ID of an unwrapped step.
 	 */
-	public static function run_step( $args = array() ) {
+	public static function run_step( $args = array(), $pos_offset = null, $pos_after = null ) {
 
-		$offset = is_array( $args ) ? (int) ( $args['offset'] ?? 0 ) : (int) $args;
-		$run    = is_array( $args ) ? (string) ( $args['run'] ?? '' ) : '';
-		$after  = is_array( $args ) ? (int) ( $args['after'] ?? 0 ) : 0;
+		if ( is_array( $args ) ) {
+			$offset = (int) ( $args['offset'] ?? 0 );
+			$run    = (string) ( $args['run'] ?? '' );
+			$after  = (int) ( $args['after'] ?? 0 );
+		} elseif ( null !== $pos_offset ) {
+			$run    = (string) $args;
+			$offset = (int) $pos_offset;
+			$after  = (int) $pos_after;
+		} else {
+			$offset = (int) $args;
+			$run    = '';
+			$after  = 0;
+		}
 
 		$progress = self::get_progress();
 
